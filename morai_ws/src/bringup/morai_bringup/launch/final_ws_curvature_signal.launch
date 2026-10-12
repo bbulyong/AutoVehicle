@@ -72,7 +72,7 @@
   <arg name="stopline_settle_distance_m" default="0.8" />
   <arg name="stopline_approach_speed_kph" default="30.0" />
   <arg name="mapped_stopline_approach_distance_m" default="80.0" />
-  <arg name="stopline_match_tolerance_m" default="8.0" />
+  <arg name="stopline_match_tolerance_m" default="4.0" />
   <arg name="stopline_cap_release_after_m" default="5.0" />
   <arg name="stopline_cap_max_detection_range_m" default="60.0" />
   <arg name="stopline_cap_min_confidence" default="0.55" />

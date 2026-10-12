@@ -71,9 +71,15 @@ class ManeuverFusionNode:
         self.max_route_error = float(rospy.get_param("~max_route_error_m", 3.0))
         self.route_stopline_match_tolerance = float(rospy.get_param(
             "~route_stopline_match_tolerance_m", 4.0))
+        self.green_release_max_sec = float(rospy.get_param("~green_release_max_sec", 6.0))
+        self.green_release_max_m = float(rospy.get_param("~green_release_max_m", 24.0))
+        self.green_release_start_distance_m = float(rospy.get_param(
+            "~green_release_start_distance_m", 25.0))
         if not all(math.isfinite(v) and v > 0 for v in
                    (self.timeout, self.signal_timeout, self.preview_m, self.turn_threshold,
-                    self.max_route_error, self.route_stopline_match_tolerance)):
+                    self.max_route_error, self.route_stopline_match_tolerance,
+                    self.green_release_max_sec, self.green_release_max_m,
+                    self.green_release_start_distance_m)):
             raise ValueError("Fusion distances, thresholds and timeouts must be positive and finite")
         self.require_quality = bool(rospy.get_param("~require_sensor_quality", True))
         self.require_safety = bool(rospy.get_param("~require_fresh_safety", True))
@@ -249,6 +255,7 @@ class ManeuverFusionNode:
         self.nominal = None
         self.nominal_at = None
         self.progress = self.segment = self.previous_ros = None
+        self.startup_inside_contexts = set()
         self.last_projection = None
         self.event = None
         self.completed = set()
@@ -256,6 +263,7 @@ class ManeuverFusionNode:
         self.last_observed_line_stamp = 0.0
         self.enter_permission = False
         self.entry_ticket = None
+        self.green_release = None
         self.merge_gap = None
         self.merge_gap_at = None
         self.state_pub = rospy.Publisher("/control/maneuver_status", String, queue_size=1)
@@ -461,7 +469,19 @@ class ManeuverFusionNode:
         if self.event is not None and not self.event["committed"]:
             self.enter_permission = False
             self.entry_ticket = None
+            self.green_release = None
             self.core.revoke_permission()
+
+    def route_release_available(self, event, now, ros_now):
+        """Carry a confirmed green only while its mapped lamp leaves CAM4 view."""
+        ticket = self.green_release
+        return bool(self.route_camera_calibrated and event and ticket
+                    and ticket[0] == route_event_key(event)
+                    and self.progress is not None
+                    and self.progress <= self.crossing_s(event) + 1.0
+                    and 0 <= self.progress - ticket[1] <= self.green_release_max_m
+                    and 0 <= now - ticket[2] <= self.green_release_max_sec
+                    and 0 <= ros_now - ticket[3] <= self.green_release_max_sec)
 
     def suspend_entry_permission(self):
         """Withhold a crossing ticket while a CAM4 frame awaits its object pair.
@@ -670,6 +690,16 @@ class ManeuverFusionNode:
             self.signal_observations.popleft()
             self.selection_stamp = sample.stamp
             self.selection = chosen
+            if (chosen.reason == "no_projected_targets"
+                    and event["camera_line_confirmed"] and ready and route_valid
+                    and self.route_release_available(event, now, ros_now)):
+                # The lamp has passed out of the calibrated image after a
+                # verified green departure. Only this visibility loss may use
+                # the bounded ticket; a visible red, ambiguity or stale stream
+                # revokes it below.
+                self.core.observe_signal("GREEN", 1.0, True,
+                                         sample.stamp, sample.received, ros_now)
+                continue
             allowed = bool(chosen.valid and event["camera_line_confirmed"] and ready
                            and route_valid and signal_permits(chosen.state, event["direction"],
                                                               self.right_on_green))
@@ -704,6 +734,7 @@ class ManeuverFusionNode:
                 self.lead.reset()
                 self.signal_observations.clear()
                 self.selection_stamp = max(self.selection_stamp, rospy.get_time())
+            self.green_release = None
             self.confirmation.reset()
             self.selection = Selection(reason="route_intent_changed")
             self.selection_context = context_id
@@ -862,6 +893,14 @@ class ManeuverFusionNode:
                 return None
         if self.progress is not None and projection.progress_s < self.progress - 2.0:
             return None  # Require restart after a teleport/backtrack, not replay old events.
+        if self.progress is None:
+            # A fresh process may start after the rear axle has already passed
+            # a mapped stop line. It must not reinterpret that line as a new
+            # approach, while future junctions still need fresh permissions.
+            self.startup_inside_contexts = {
+                context["id"] for context in self.route_signal_contexts
+                if context["stop_s"] + 2.0 < projection.progress_s < context["end"]
+            }
         self.progress = projection.progress_s
         self.segment = projection.segment_index
         self.last_projection = (self.progress, ros_now, speed)
@@ -931,7 +970,9 @@ class ManeuverFusionNode:
                         direction_source=context["direction_source"],
                         heading_change_deg=context["heading_change_deg"],
                         geometry_direction=context["geometry_direction"],
-                        camera_line_confirmed=False, committed=False,
+                        camera_line_confirmed=False,
+                        committed=context["id"] in self.startup_inside_contexts,
+                        resumed_inside=context["id"] in self.startup_inside_contexts,
                     )
                 break
             return
@@ -1039,12 +1080,14 @@ class ManeuverFusionNode:
                 self.vehicle_speed_source = VehicleSpeedSource(timeout_sec=self.vehicle_speed_timeout)
                 self.vehicle_speed_mps = self.odometry_speed_mps = None
                 self.progress = self.segment = self.event = None
+                self.startup_inside_contexts.clear()
                 self.last_projection = None
                 self.merge_gap = self.merge_gap_at = None
                 self.completed.clear()
                 self.ignore_line_until_s = -1.0
                 self.enter_permission = False
                 self.entry_ticket = None
+                self.green_release = None
                 self.lead.reset()
                 self.core = StopLineControllerCore(**self.core_params)
                 self.last_observed_line_stamp = 0.0
@@ -1080,6 +1123,11 @@ class ManeuverFusionNode:
             corridor_ok = self.blackout_corridor(quality, fallback, speed, route_valid, line, objects, now, ros_now)
             if route_valid:
                 self.discover_event(line, speed, now, ros_now)
+                if self.route_signal_contexts and self.event is None and self.core.stop_requested:
+                    # No selected map junction may retain an old camera-only
+                    # stop request after a process restart or route transition.
+                    self.core = StopLineControllerCore(**self.core_params)
+                    self.green_release = None
 
             motion = self.turn_assessment(odom, speed)
             completed_this_tick = None
@@ -1092,6 +1140,7 @@ class ManeuverFusionNode:
                 self.event = None
                 self.enter_permission = False
                 self.entry_ticket = None
+                self.green_release = None
                 self.lead.reset()
                 self.core = StopLineControllerCore(**self.core_params)
                 # Only a genuinely newer line may arm the next intersection.
@@ -1184,18 +1233,22 @@ class ManeuverFusionNode:
                                 event["stopline_match_error_m"] = measured_s - event["stop_s"]
                                 if abs(event["stopline_match_error_m"]) <= self.route_stopline_match_tolerance:
                                     event["camera_line_confirmed"] = True
-                                    event["start"] = min(event["start"], measured_s)
+                                    # CAM1 confirms the selected map line; it
+                                    # cannot pull the braking target onto a
+                                    # nearer marking in an adjacent lane.
                         self.core.observe_line(max(0.0, event["start"] - self.progress),
                                                1.0, True, ros_now, now, ros_now,
                                                target_id=event["id"])
                     self.consume_route_signals(event, ready, route_valid and not motion.fault,
                                                now, ros_now)
                     if self.route_camera_calibrated:
-                        signal_ok = bool(objects is not None and self.selection.valid
+                        release_latched = bool(self.selection.reason == "no_projected_targets"
+                                               and self.route_release_available(event, now, ros_now))
+                        signal_ok = bool(objects is not None and (self.selection.valid or release_latched)
                                          and not self.signal_observations
                                          and -0.05 <= ros_now - self.selection_stamp <= self.signal_timeout)
-                        permitted = bool(signal_ok and signal_permits(
-                            self.selection.state, direction, self.right_on_green))
+                        permitted = bool(signal_ok and (release_latched or signal_permits(
+                            self.selection.state, direction, self.right_on_green)))
                     permitted = bool(permitted and event and
                                      event["camera_line_confirmed"] and ready and route_valid
                                      and not motion.fault and self.core.signal is not None
@@ -1354,6 +1407,15 @@ class ManeuverFusionNode:
                     event["committed"] = True
             if event and event.get("entry_fault"):
                 reasons.append("entry_without_current_permission")
+            if reasons:
+                self.green_release = None
+            elif (self.route_camera_calibrated and event and not committed
+                    and self.selection.valid and permitted and ready and route_valid
+                    and event.get("camera_line_confirmed") and current_junction_released
+                    and self.progress is not None
+                    and 0 <= event["stop_s"] - self.progress <= self.green_release_start_distance_m
+                    and self.progress <= self.crossing_s(event)):
+                self.green_release = (route_event_key(event), self.progress, now, ros_now)
             self.enter_permission = bool(event and route_valid and ready and (permitted or committed)
                                          and current_junction_released and not reasons)
             self.entry_ticket = ((route_event_key(event), self.progress, now, ros_now)
@@ -1458,6 +1520,8 @@ class ManeuverFusionNode:
                 "route_cam4_candidate_count": self.route_signal_candidate_count(route_objects),
                 "signal_pending_frames": len(self.signal_observations),
                 "signal_release_suspended": signal_frame_pending,
+                "signal_release_latched": bool(event and self.selection.reason == "no_projected_targets"
+                                               and self.route_release_available(event, now, ros_now)),
                 "green_confirmation_samples": self.core.green_samples,
                 "signal_queue_overflows": self.signal_queue_overflows,
                 "signal_processed_stamp": self.selection_stamp if self.require_context or self.route_camera_calibrated else self.core.last_signal_stamp,

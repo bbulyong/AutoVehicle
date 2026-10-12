@@ -21,7 +21,7 @@ class StopLineCandidate:
 
 def select_stopline(bev, x_max_m=40.0, y_max_m=10.0, resolution_m=0.05,
                     class_id=4, half_width_m=2.0, min_pixels=30,
-                    min_width_m=1.5, side_support_m=0.4,
+                    min_width_m=1.5, side_support_m=0.9,
                     max_longitudinal_gap_m=0.15, max_lateral_gap_m=0.3,
                     max_thickness_m=0.7, max_angle_deg=35.0):
     """Fit x = slope*y + distance separately for each longitudinal band.
