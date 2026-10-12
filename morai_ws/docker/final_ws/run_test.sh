@@ -7,7 +7,7 @@ ACTION="${1:-show}"
 if [[ $# -gt 2 || ! "$ACTION" =~ ^(show|monitor|drive|diagnose|speed|lane|turn|models|request-merge|view|rviz)$ ]] ||
    [[ "$ACTION" =~ ^(models|request-merge|view|rviz)$ && $# -gt 1 ]] ||
    [[ "$ACTION" == diagnose && $# -gt 1 && "$2" != 2 ]]; then
-  echo 'Usage: bash run_test.sh {show|monitor|drive} [1-5]; or {speed KMH|lane on/off|turn safe|models|request-merge|diagnose [2]|view|rviz}' >&2
+  echo 'Usage: bash run_test.sh {show|monitor|drive} [1-5]; or {speed KMH|lane on/off|turn safe/mission|models|request-merge|diagnose [2]|view|rviz}' >&2
   exit 2
 fi
 if [[ ! -f "$SCRIPT_DIR/highway.env" || ! -f "$SCRIPT_DIR/highway-test.env" ]]; then
@@ -46,13 +46,20 @@ if [[ "$ACTION" == speed ]]; then
   exit 0
 fi
 if [[ "$ACTION" == turn ]]; then
-  [[ "${2:-}" == safe ]] || {
-    echo 'Usage: bash run_test.sh turn safe' >&2; exit 2;
-  }
+  case "${2:-}" in
+    safe)
+      # Conservative fallback for comparing the previous 35 km/h behavior.
+      preset=(MAX_SPEED_KPH=35.0 LATERAL_ACCEL_LIMIT_MPS2=0.45 MAX_ACCEL_MPS2=0.8 CURVE_PLANNING_DECEL_MPS2=0.8 SPEED_KP=0.35 SPEED_KI=0.03 STOPLINE_PLANNING_DECEL_MPS2=0.6)
+      ;;
+    mission)
+      # Keep a 5 km/h margin below the mission ceiling. Curvature and the
+      # spatial braking profile still slow the vehicle before tight turns.
+      preset=(MAX_SPEED_KPH=55.0 LATERAL_ACCEL_LIMIT_MPS2=0.9 MAX_ACCEL_MPS2=1.4 CURVE_PLANNING_DECEL_MPS2=1.2 SPEED_KP=0.45 SPEED_KI=0.05 STOPLINE_PLANNING_DECEL_MPS2=1.0)
+      ;;
+    *) echo 'Usage: bash run_test.sh turn {safe|mission}' >&2; exit 2 ;;
+  esac
   cp -p "$SCRIPT_DIR/highway-test.env" "$SCRIPT_DIR/highway-test.env.bak"
-  # 35 km/h is a ceiling on straights. The metre-resampled curvature profile
-  # slows bends further, and the fusion node guards measured overspeed.
-  for entry in MAX_SPEED_KPH=35.0 LATERAL_ACCEL_LIMIT_MPS2=0.45 MAX_ACCEL_MPS2=0.8 CURVE_PLANNING_DECEL_MPS2=0.8 SPEED_KP=0.35 SPEED_KI=0.03 SPEED_ERROR_DEADBAND_KPH=0.5 PEDAL_ACCEL_RISE_RATE_PER_SEC=0.7 PEDAL_BRAKE_RISE_RATE_PER_SEC=1.5 PEDAL_RELEASE_RATE_PER_SEC=2.0 MAX_STEERING_RATE_RAD_S=1.2 LOOKAHEAD_GAIN=0.25 STEERING_FEEDFORWARD_WEIGHT=0.35 STOPLINE_APPROACH_SPEED_KPH=30.0 STOPLINE_HOLD_DISTANCE_M=12.0 STOPLINE_PLANNING_DECEL_MPS2=0.6 STOPLINE_BRAKE_RAMP_DISTANCE_M=30.0 STOPLINE_SETTLE_DISTANCE_M=0.8; do
+  for entry in "${preset[@]}" SPEED_ERROR_DEADBAND_KPH=0.5 PEDAL_ACCEL_RISE_RATE_PER_SEC=0.7 PEDAL_BRAKE_RISE_RATE_PER_SEC=1.5 PEDAL_RELEASE_RATE_PER_SEC=2.0 MAX_STEERING_RATE_RAD_S=1.2 LOOKAHEAD_GAIN=0.25 STEERING_FEEDFORWARD_WEIGHT=0.35 STOPLINE_APPROACH_SPEED_KPH=30.0 STOPLINE_HOLD_DISTANCE_M=12.0 STOPLINE_BRAKE_RAMP_DISTANCE_M=30.0 STOPLINE_SETTLE_DISTANCE_M=0.8; do
     name="${entry%%=*}"
     value="${entry#*=}"
     if grep -q "^${name}=" "$SCRIPT_DIR/highway-test.env"; then
@@ -61,7 +68,7 @@ if [[ "$ACTION" == turn ]]; then
       printf '\n%s=%s\n' "$name" "$value" >> "$SCRIPT_DIR/highway-test.env"
     fi
   done
-  echo 'Turn/intersection settings saved: max 35 km/h, mapped stopline approach 30 km/h, continuous S-bend speed, progressive pedals, stopline clearance 12.0 m.'
+  echo "Turn/intersection preset ${2} saved: straight ceiling ${preset[0]#*=} km/h, mapped stopline approach 30 km/h, clearance 12.0 m."
   echo 'Restart the driving launch to apply; no live parameter was changed. Previous settings: highway-test.env.bak'
   exit 0
 fi
@@ -126,9 +133,9 @@ case "${2:-$TEST_PROFILE}" in
   *) echo "Unknown test case: ${2:-$TEST_PROFILE}; use 1-5." >&2; exit 2 ;;
 esac
 if [[ "$TEST_PROFILE" == curvature_signal ]] &&
-   ! awk -v speed="$MAX_SPEED_KPH" 'BEGIN {exit !(speed > 0 && speed <= 35)}'; then
-  echo "ERROR: saved profile 2 speed is $MAX_SPEED_KPH km/h; this profile is limited to 35 km/h." >&2
-  echo 'Run bash run_test.sh speed 35, then restart the launch.' >&2
+   ! awk -v speed="$MAX_SPEED_KPH" 'BEGIN {exit !(speed > 0 && speed <= 55)}'; then
+  echo "ERROR: saved profile 2 speed is $MAX_SPEED_KPH km/h; this profile is limited to 55 km/h." >&2
+  echo 'Run bash run_test.sh turn mission (or speed 55), then restart the launch.' >&2
   exit 2
 fi
 CONTROL=false
@@ -160,6 +167,7 @@ case "$TEST_PROFILE" in
   curvature_signal)
     LAUNCH=final_ws_curvature_signal.launch
     PROFILE_ARGS=(
+      "curve_lateral_accel_limit_mps2:=$LATERAL_ACCEL_LIMIT_MPS2"
       "curve_planning_decel_mps2:=$CURVE_PLANNING_DECEL_MPS2"
       "pedal_accel_rise_rate_per_sec:=$PEDAL_ACCEL_RISE_RATE_PER_SEC"
       "pedal_brake_rise_rate_per_sec:=$PEDAL_BRAKE_RISE_RATE_PER_SEC"
