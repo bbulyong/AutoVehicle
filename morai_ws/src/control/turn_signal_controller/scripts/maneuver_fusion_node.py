@@ -579,7 +579,7 @@ class ManeuverFusionNode:
         return next((sample for sample in self.route_object_observations
                      if abs(sample.stamp - stamp) <= 1e-6), None)
 
-    def constrain_route_speed(self, decision, speed):
+    def constrain_route_speed(self, decision, speed, released_context_id=None):
         """Bound measured speed even if the nominal PI pedal or path profile lags."""
         self.governor_target_kph = self.governor_stopline_distance_m = None
         if not self.speed_governor_enabled or speed is None or self.progress is None:
@@ -589,10 +589,14 @@ class ManeuverFusionNode:
             distance = context["stop_s"] - self.progress
             if distance < -self.mapped_cap_release_after_m:
                 continue
+            if context["id"] == released_context_id:
+                # A confirmed, direction-compatible green has released this
+                # mapped line. Keep the normal curvature speed profile.
+                continue
             if distance <= self.mapped_approach_distance_m:
                 self.governor_stopline_distance_m = distance
-                # Reach 30 km/h well before the mapped stop line. The 50 m
-                # transition makes a green approach continuous too.
+                # Retain the approach cap when the mapped signal is red,
+                # unknown, or has not yet passed source-frame confirmation.
                 fraction = clamp((distance - 20.0) /
                                  max(self.mapped_approach_distance_m - 20.0, 1.0),
                                  0.0, 1.0)
@@ -702,7 +706,7 @@ class ManeuverFusionNode:
             self.selection_stamp = sample.stamp
             self.selection = chosen
             if (chosen.reason == "no_projected_targets"
-                    and event["camera_line_confirmed"] and ready and route_valid
+                    and ready and route_valid
                     and self.route_release_available(event, now, ros_now)):
                 # The lamp has passed out of the calibrated image after a
                 # verified green departure. Only this visibility loss may use
@@ -711,7 +715,7 @@ class ManeuverFusionNode:
                 self.core.observe_signal("GREEN", 1.0, True,
                                          sample.stamp, sample.received, ros_now)
                 continue
-            allowed = bool(chosen.valid and event["camera_line_confirmed"] and ready
+            allowed = bool(chosen.valid and ready
                            and route_valid and signal_permits(chosen.state, event["direction"],
                                                               self.right_on_green))
             if not allowed:
@@ -1270,9 +1274,9 @@ class ManeuverFusionNode:
             else:
                 if self.route_signal_contexts:
                     if event and route_valid and not committed:
-                        # MGeo selects the intersection and its direction. A
-                        # CAM1 line near that mapped stop is still required
-                        # before any CAM4 color can permit entry.
+                        # MGeo selects the intersection, stop target and route
+                        # direction. CAM1 can corroborate this line, but a
+                        # different lane's marking must not veto its green.
                         if self.valid_sensor_stopline(line):
                             measured_s = self.line_route_s(line)
                             if measured_s is not None:
@@ -1296,7 +1300,8 @@ class ManeuverFusionNode:
                         permitted = bool(signal_ok and (release_latched or signal_permits(
                             self.selection.state, direction, self.right_on_green)))
                     permitted = bool(permitted and event and
-                                     event["camera_line_confirmed"] and ready and route_valid
+                                     (self.route_camera_calibrated or event["camera_line_confirmed"])
+                                     and ready and route_valid
                                      and not motion.fault and self.core.signal is not None
                                      and self.core.signal.value == "GREEN"
                                      and self.core.signal.fresh(ros_now, now, self.signal_timeout))
@@ -1389,7 +1394,10 @@ class ManeuverFusionNode:
             # An allowed arrow controls entry, not cornering speed. Retain the
             # original core mode so a speed limit cannot erase an entry ticket.
             decision = motion.constrain(decision)
-            decision = self.constrain_route_speed(decision, speed)
+            released_context_id = (event["id"] if self.route_camera_calibrated
+                                   and event and permitted and decision.reason == "green"
+                                   else None)
+            decision = self.constrain_route_speed(decision, speed, released_context_id)
             reasons = [motion.fault] if motion.fault else []
             # UNKNOWN/no line is a valid new image observation. No new stamped
             # observations is a dead camera/inference stream, including mid-turn.
@@ -1457,7 +1465,7 @@ class ManeuverFusionNode:
                 self.green_release = None
             elif (self.route_camera_calibrated and event and not committed
                     and self.selection.valid and permitted and ready and route_valid
-                    and event.get("camera_line_confirmed") and current_junction_released
+                    and current_junction_released
                     and self.progress is not None
                     and 0 <= event["stop_s"] - self.progress <= self.green_release_start_distance_m
                     and self.progress <= self.crossing_s(event)):
@@ -1488,8 +1496,6 @@ class ManeuverFusionNode:
                              self.route_objects_at(signal.stamp) if signal and self.route_signal_contexts else None)
             if self.require_context or self.route_camera_calibrated:
                 signal_selection_reason = self.selection.reason
-                if self.route_camera_calibrated and event and not event["camera_line_confirmed"]:
-                    signal_selection_reason = "awaiting_cam1_stopline_match:" + self.selection.reason
             elif self.route_signal_contexts:
                 if event and not event["camera_line_confirmed"]:
                     signal_selection_reason = "awaiting_cam1_stopline_match"
