@@ -1,28 +1,11 @@
-cd ~/AutoVehicle/morai_ws/docker/final_ws
-bash run_highway.sh stop
-
-cd ~/AutoVehicle
-git fetch origin final_ws
-git worktree add --detach ~/AutoVehicle-finalws-20261012 origin/final_ws
 cd ~/AutoVehicle-finalws-20261012
-git rev-parse --short HEAD
-마지막 값이 5cb7c5f 또는 그 이후 커밋이어야 합니다. 이어서 기존 설정을 새 폴더로 복사합니다.
-cp ~/AutoVehicle/morai_ws/docker/final_ws/highway.env morai_ws/docker/final_ws/
-cp ~/AutoVehicle/morai_ws/docker/final_ws/highway-test.env morai_ws/docker/final_ws/
-nano morai_ws/docker/final_ws/highway.env
-highway.env에서 다음 세 값을 설정하세요.
-UBUNTU_IP=192.168.10.21
-MORAI_IP=192.168.10.14
-CONTAINER_NAME=morai-highway-153-net10
-새 컨테이너에 코드를 설치하고 주행합니다.
-cd ~/AutoVehicle-finalws-20261012/morai_ws/docker/final_ws
-bash run_highway.sh start
+git fetch origin final_ws
+git switch --detach origin/final_ws
+cd morai_ws/docker/final_ws
 bash run_highway.sh stop
 bash install_curvature_signal.sh --config
 bash run_highway.sh start
-
-bash run_test.sh turn safe
-bash run_test.sh speed 35
+bash run_test.sh turn mission
 bash run_test.sh lane on
 bash run_test.sh show 2
 bash run_test.sh drive 2
