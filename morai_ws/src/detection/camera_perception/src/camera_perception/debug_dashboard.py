@@ -21,6 +21,7 @@ EXPLANATIONS = {
     'signal_pose_pair_pending': 'CAM4 영상 시각에 맞는 차량 위치를 기다리는 중입니다.',
     'no_projected_targets': '현재 CAM4 화면에 투영되는 경로 신호등이 없습니다. 카메라 설정·차량 위치·정차 여유를 확인하세요.',
     'no_match': 'MGeo 신호등 투영 위치에 맞는 CAM4 검출이 없습니다.',
+    'verified_green_carry': '현재 교차로에서 앞서 확인한 초록 신호를 짧게 유지하며 통과 중입니다.',
     'ambiguous_other_head': '검출 상자에 다른 경로의 신호등도 겹쳐 신호 허가를 보류합니다.',
     'conflicting_target_heads': '같은 경로에 연결된 신호등들의 허용 방향이 서로 다릅니다.',
     'matched_route_group': '현재 경로에 연결된 MGeo 신호등과 CAM4 검출이 일치합니다.',
@@ -86,6 +87,9 @@ def diagnose(values):
     if status:
         codes += [s for s in str(status.get('reason', '')).split(',') if s]
         selection = status.get('signal_selection_reason')
+        if (status.get('signal_release_latched')
+                and selection in ('no_match', 'no_projected_targets')):
+            selection = 'verified_green_carry'
         if selection and selection not in codes:
             codes.append(selection)
     notes = [dict(code=c, text=EXPLANATIONS.get(c, c)) for c in codes]

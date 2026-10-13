@@ -82,10 +82,10 @@ class ManeuverFusionNode:
         self.max_route_error = float(rospy.get_param("~max_route_error_m", 3.0))
         self.route_stopline_match_tolerance = float(rospy.get_param(
             "~route_stopline_match_tolerance_m", 4.0))
-        self.green_release_max_sec = float(rospy.get_param("~green_release_max_sec", 6.0))
-        self.green_release_max_m = float(rospy.get_param("~green_release_max_m", 24.0))
+        self.green_release_max_sec = float(rospy.get_param("~green_release_max_sec", 10.0))
+        self.green_release_max_m = float(rospy.get_param("~green_release_max_m", 55.0))
         self.green_release_start_distance_m = float(rospy.get_param(
-            "~green_release_start_distance_m", 25.0))
+            "~green_release_start_distance_m", 45.0))
         if not all(math.isfinite(v) and v > 0 for v in
                    (self.timeout, self.signal_timeout, self.preview_m, self.turn_threshold,
                     self.max_route_error, self.route_stopline_match_tolerance,
@@ -487,12 +487,37 @@ class ManeuverFusionNode:
         """Carry a confirmed green only while its mapped lamp leaves CAM4 view."""
         ticket = self.green_release
         return bool(self.route_camera_calibrated and event and ticket
+                    and not event.get("committed")
                     and ticket[0] == route_event_key(event)
                     and self.progress is not None
                     and self.progress <= self.crossing_s(event) + 1.0
                     and 0 <= self.progress - ticket[1] <= self.green_release_max_m
                     and 0 <= now - ticket[2] <= self.green_release_max_sec
                     and 0 <= ros_now - ticket[3] <= self.green_release_max_sec)
+
+    def route_green_visibility_loss(self, selection, objects, event, now, ros_now):
+        """Keep an earlier mapped GREEN through a bounded detection dropout.
+
+        A fresh unmatched frame is not a new green vote. An observed stop,
+        unknown indication, or ambiguous mapped head cancels this carry.
+        """
+        if (selection.reason not in ("no_match", "no_projected_targets")
+                or objects.stamp != self.selection_stamp
+                or not self.route_release_available(event, now, ros_now)):
+            return False
+        if selection.reason == "no_match":
+            for obj in objects.value.objects:
+                try:
+                    confidence = float(obj.conf)
+                except (AttributeError, TypeError, ValueError, OverflowError):
+                    return False
+                if not finite(confidence) or confidence > 1.0:
+                    return False
+                if confidence >= 0.5:
+                    state, _ = directional_observation((obj,))
+                    if not signal_permits(state, event["direction"], self.right_on_green):
+                        return False
+        return True
 
     def suspend_entry_permission(self):
         """Withhold a crossing ticket while a CAM4 frame awaits its object pair.
@@ -705,13 +730,11 @@ class ManeuverFusionNode:
             self.signal_observations.popleft()
             self.selection_stamp = sample.stamp
             self.selection = chosen
-            if (chosen.reason == "no_projected_targets"
-                    and ready and route_valid
-                    and self.route_release_available(event, now, ros_now)):
-                # The lamp has passed out of the calibrated image after a
-                # verified green departure. Only this visibility loss may use
-                # the bounded ticket; a visible red, ambiguity or stale stream
-                # revokes it below.
+            if (ready and route_valid and self.route_green_visibility_loss(
+                    chosen, sample, event, now, ros_now)):
+                # The confirmed route signal can leave the calibrated gate
+                # before the front axle crosses. An explicit stop indication
+                # or ambiguous mapped head still revokes permission below.
                 self.core.observe_signal("GREEN", 1.0, True,
                                          sample.stamp, sample.received, ros_now)
                 continue
@@ -1292,8 +1315,9 @@ class ManeuverFusionNode:
                     self.consume_route_signals(event, ready, route_valid and not motion.fault,
                                                now, ros_now)
                     if self.route_camera_calibrated:
-                        release_latched = bool(self.selection.reason == "no_projected_targets"
-                                               and self.route_release_available(event, now, ros_now))
+                        release_latched = bool(objects is not None and
+                                               self.route_green_visibility_loss(
+                                                   self.selection, objects, event, now, ros_now))
                         signal_ok = bool(objects is not None and (self.selection.valid or release_latched)
                                          and not self.signal_observations
                                          and -0.05 <= ros_now - self.selection_stamp <= self.signal_timeout)
@@ -1465,7 +1489,7 @@ class ManeuverFusionNode:
                 self.green_release = None
             elif (self.route_camera_calibrated and event and not committed
                     and self.selection.valid and permitted and ready and route_valid
-                    and current_junction_released
+                    and self.core._green_confirmed(now, ros_now)
                     and self.progress is not None
                     and 0 <= event["stop_s"] - self.progress <= self.green_release_start_distance_m
                     and self.progress <= self.crossing_s(event)):
@@ -1572,8 +1596,9 @@ class ManeuverFusionNode:
                 "route_cam4_candidate_count": self.route_signal_candidate_count(route_objects),
                 "signal_pending_frames": len(self.signal_observations),
                 "signal_release_suspended": signal_frame_pending,
-                "signal_release_latched": bool(event and self.selection.reason == "no_projected_targets"
-                                               and self.route_release_available(event, now, ros_now)),
+                "signal_release_latched": bool(objects is not None and event and
+                                               self.route_green_visibility_loss(
+                                                   self.selection, objects, event, now, ros_now)),
                 "green_confirmation_samples": self.core.green_samples,
                 "signal_queue_overflows": self.signal_queue_overflows,
                 "signal_processed_stamp": self.selection_stamp if self.require_context or self.route_camera_calibrated else self.core.last_signal_stamp,
