@@ -145,6 +145,9 @@ class ManeuverFusionNode:
         if require_signalized and not context_ids:
             raise ValueError("Required signalized route context list is empty")
         self.route_signal_contexts = []
+        correlated_signal_heads = rospy.get_param("~correlated_signal_heads", {})
+        if not isinstance(correlated_signal_heads, dict):
+            raise ValueError("correlated_signal_heads must map context IDs to two head IDs")
         if context_ids:
             mapped = {item["id"]: item for item in load_route_contexts(
                 mgeo_dir, self.points, self.s_values)}
@@ -166,6 +169,24 @@ class ManeuverFusionNode:
                    ("STRAIGHT", "LEFT", "RIGHT") or not item["signal_ids"]
                    for item in self.route_signal_contexts):
                 raise ValueError("Signalized contexts need a mapped stop line, direction and signal")
+        contexts_by_id = {item["id"]: item for item in self.route_signal_contexts}
+        for context_id, head_ids in correlated_signal_heads.items():
+            if (not isinstance(context_id, str) or context_id not in contexts_by_id
+                    or not isinstance(head_ids, list) or len(head_ids) != 2
+                    or any(not isinstance(identifier, str) or not identifier for identifier in head_ids)
+                    or len(set(head_ids)) != 2
+                    or set(head_ids) != set(contexts_by_id[context_id]["signal_ids"])):
+                raise ValueError("Correlated heads must be exactly the two mapped heads of a selected context: "
+                                 + str(context_id))
+        if correlated_signal_heads:
+            with (Path(mgeo_dir) / "intersection_controller_set.json").open(encoding="utf-8-sig") as stream:
+                controller_groups = [set(phase) for controller in json.load(stream)
+                                     for phase in controller.get("TL", [])]
+            for context_id, head_ids in correlated_signal_heads.items():
+                if not any(set(head_ids) <= group for group in controller_groups):
+                    raise ValueError("Correlated heads do not share an MGeo controller phase: "
+                                     + context_id)
+        self.correlated_signal_heads = correlated_signal_heads
         self.route_camera_calibrated = bool(
             self.route_signal_contexts and isinstance(self.camera, dict)
             and self.camera.get("calibrated") is True)
@@ -856,7 +877,9 @@ class ManeuverFusionNode:
             others = {h["id"]: project_signal(h, ego, self.camera) for h in self.map_heads
                       if h["id"] not in targets}
             selection = associate(objects.value.objects, targets, others,
-                                  allow_target_group=event.get("source") == "route_camera")
+                                  allow_target_group=event.get("source") == "route_camera",
+                                  allow_correlated_pair=(event.get("source") == "route_camera"
+                                                         and event.get("id") in self.correlated_signal_heads))
         except (ValueError, TypeError, AttributeError, KeyError):
             selection = Selection("UNKNOWN", 0.0, False, None, "signal_projection_invalid")
         return selection

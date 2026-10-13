@@ -168,7 +168,8 @@ def _contains(box, pixel):
     return x0 <= u <= x1 and y0 <= v <= y1
 
 
-def associate(objects, projected_targets, projected_others=None, allow_target_group=False):
+def associate(objects, projected_targets, projected_others=None, allow_target_group=False,
+              allow_correlated_pair=False):
     """Select exactly one geometrically unique route-head/detection pair.
 
     Objects expose ObjectInfo attributes x_center/y_center/width/height in
@@ -186,10 +187,16 @@ def associate(objects, projected_targets, projected_others=None, allow_target_gr
     return UNKNOWN. An empty target set never falls back to another head.
 
     ``allow_target_group`` is only for heads explicitly bound by MGeo to the
-    same route link. Each detection must match that group and no other head.
+    same route link. Each detection must match that group and no other head
+    unless the correlated-pair exception below applies.
     Duplicate bulb/housing boxes are resolved only for a unique mapped head.
     When two repeated group heads are too close to distinguish, each full
     indication contributes independently; only their shared permissions pass.
+    ``allow_correlated_pair`` is an explicit route-context exception for two
+    mapped heads in one controller phase. It needs two distinct detections,
+    one per projected target, whose centers favor those targets over any other
+    projected head. Both indications must agree; their stronger confidence is
+    reported. A single ambiguous detection or conflicting pair still fails.
     """
     try:
         targets = _projections(projected_targets)
@@ -207,7 +214,8 @@ def associate(objects, projected_targets, projected_others=None, allow_target_gr
         from camera_perception.traffic_signal import (
             count_signal_housings, directional_observation,
         )
-        grouped, unresolved = {}, []
+        grouped, unresolved, pair_candidates = {}, [], []
+        ambiguous_other = False
         try:
             for obj in objects:
                 x, y, width, height, confidence = (
@@ -225,8 +233,13 @@ def associate(objects, projected_targets, projected_others=None, allow_target_gr
                            if _contains(box, pixel)]
                 if not matches:
                     continue
-                if any(_contains(box, pixel) for pixel in others.values()):
-                    return _unknown("ambiguous_other_head")
+                overlapping_others = [pixel for pixel in others.values()
+                                      if _contains(box, pixel)]
+                if overlapping_others:
+                    if not allow_correlated_pair:
+                        return _unknown("ambiguous_other_head")
+                    ambiguous_other = True
+                pair_candidates.append((obj, x, y, matches, overlapping_others))
                 if len(matches) > 1:
                     # All possible identities are proven members of the same
                     # route link. Do not merge a red bulb and a distant arrow
@@ -239,6 +252,38 @@ def associate(objects, projected_targets, projected_others=None, allow_target_gr
                 grouped.setdefault(matches[0], []).append(obj)
         except (AttributeError, TypeError, ValueError, OverflowError):
             return _unknown("invalid_object")
+        if ambiguous_other:
+            # This exception applies only to two known co-phased route heads.
+            # A pair of detections must cover both distinct map projections.
+            if len(targets) != 2 or len(pair_candidates) != 2:
+                return _unknown("ambiguous_other_head")
+            first, second = pair_candidates
+            if math.hypot(first[1] - second[1], first[2] - second[2]) < 4.0:
+                return _unknown("ambiguous_other_head")
+            candidate_states = []
+            for obj, x, y, matches, overlapping in pair_candidates:
+                state = _state(obj.class_name)
+                if state == "UNKNOWN":
+                    return _unknown("unsupported_class")
+                candidate_states.append((state, _number(obj.conf)))
+            if candidate_states[0][0] != candidate_states[1][0]:
+                return _unknown("conflicting_target_heads")
+            target_ids = list(targets)
+
+            def favors_target(candidate, identifier):
+                _, x, y, matches, overlapping = candidate
+                if identifier not in matches:
+                    return False
+                u, v = targets[identifier]
+                target_distance = (x-u)**2 + (y-v)**2
+                return all(target_distance < (x-ox)**2 + (y-oy)**2
+                           for ox, oy in overlapping)
+            if not (favors_target(first, target_ids[0]) and favors_target(second, target_ids[1])
+                    or favors_target(first, target_ids[1]) and favors_target(second, target_ids[0])):
+                return _unknown("ambiguous_other_head")
+            identifiers = tuple(sorted(projected_targets, key=str))
+            return Selection(candidate_states[0][0], max(score for _, score in candidate_states),
+                             True, identifiers, "matched_correlated_pair")
         if not grouped and not unresolved:
             return _unknown("no_match")
         indications = list(unresolved)
@@ -267,7 +312,10 @@ def associate(objects, projected_targets, projected_others=None, allow_target_gr
         # stop/conflict, which was handled above for every associated head.
         identifiers = tuple(sorted(projected_targets, key=str))
         selected_id = identifiers[0] if len(identifiers) == 1 else identifiers
-        return Selection(state, min(score for _, score in indications),
+        confidence = (max(score for _, score in indications)
+                      if allow_correlated_pair and len(indications) == 2 and len(states) == 1
+                      else min(score for _, score in indications))
+        return Selection(state, confidence,
                          True, selected_id, "matched_route_group")
 
     matches = []

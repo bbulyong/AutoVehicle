@@ -13,6 +13,7 @@ curvature_runtime_files() (
       src/detection/camera_perception/models/best0917.pt \
       src/detection/camera_perception/lane/mgeo/R_KR_PR_K-city_2025/link_set.json \
       src/detection/camera_perception/lane/mgeo/R_KR_PR_K-city_2025/node_set.json \
+      src/detection/camera_perception/lane/mgeo/R_KR_PR_K-city_2025/intersection_controller_set.json \
       src/detection/camera_perception/lane/mgeo/R_KR_PR_K-city_2025/traffic_light_set.json \
       src/control/purepursuit_mgeo/src/purepursuit_mgeo/longitudinal_controller.py \
       data/routes/2026_molit_comp_global_path.txt \

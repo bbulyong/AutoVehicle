@@ -19,6 +19,12 @@ signalized_context_ids:
   - "mgeo:A2256W000318:0"  # 551 m, RIGHT
   - "mgeo:A2256W000083:0"  # 610 m, LEFT
 
+# These two vehicle heads are on the same A2256W000599 route link and in one
+# IntTL3 controller phase. Require both detected indications to agree before
+# resolving an overlapping projection from another mapped signal.
+correlated_signal_heads:
+  "mgeo:A2256W000599:0": ["C1256W000016", "C1256W000018"]
+
 input_timeout_sec: 0.5
 signal_timeout_sec: 0.8
 max_route_error_m: 3.0
