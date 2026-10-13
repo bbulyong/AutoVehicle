@@ -9,3 +9,18 @@ bash run_test.sh turn mission
 bash run_test.sh lane on
 bash run_test.sh show 2
 bash run_test.sh drive 2
+
+
+
+cd ~/AutoVehicle-finalws-20261012/morai_ws/docker/final_ws
+bash run_highway.sh shell
+(morai-venv)가 뜨면 그 안에서 다음을 입력하세요.
+rostopic echo -n 1 /experimental/curvature_progress
+rostopic echo -n 1 /localization/odometry/pose/pose/position
+첫 결과의 data가 경로 시작점부터의 거리 **s(m)**이고, 두 번째 결과의 x, y가 차량의 현재 지도 좌표입니다.
+가장 가까운 MGeo 링크 ID와 경로상 투영 위치까지 확인하려면, 컨테이너에서 exit한 뒤 방금 얻은 좌표를 넣어 실행하세요.
+cd ~/AutoVehicle-finalws-20261012
+python3 morai_ws/src/control/purepursuit_mgeo/scripts/locate_route_region.py \
+  --xy X값 Y값 --hint-s S값 \
+  --path-file morai_ws/data/routes/2026_molit_comp_global_path.txt \
+  --link-set-file morai_ws/src/detection/camera_perception/lane/mgeo/R_KR_PR_K-city_2025/link_set.json
