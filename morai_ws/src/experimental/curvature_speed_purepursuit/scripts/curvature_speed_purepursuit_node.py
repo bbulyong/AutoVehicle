@@ -33,6 +33,7 @@ from purepursuit_mgeo.longitudinal_controller import (
 from curvature_speed_purepursuit.planner import (
     PathPoint,
     build_speed_profile,
+    build_cyclic_speed_profile,
     clean_consecutive_duplicates,
     cumulative_arc_lengths,
     curvature_profile,
@@ -45,6 +46,7 @@ from curvature_speed_purepursuit.planner import (
     minimum_speed_ahead,
     load_path_file,
     nearest_projection,
+    nearest_projection_on_loop,
     profile_value_at_s,
 )
 from curvature_speed_purepursuit.lane_centering import (
@@ -86,6 +88,16 @@ class CurvatureSpeedPurePursuitNode:
         )
         self.s_values = cumulative_arc_lengths(self.points)
         self.total_length_m = self.s_values[-1]
+        self.loop_route = bool(rospy.get_param("~loop_route", False))
+        if self.loop_route:
+            seam_gap = math.hypot(self.points[0].x - self.points[-1].x,
+                                  self.points[0].y - self.points[-1].y)
+            first, last = self.points[1], self.points[-2]
+            first_yaw = math.atan2(first.y - self.points[0].y, first.x - self.points[0].x)
+            last_yaw = math.atan2(self.points[-1].y - last.y, self.points[-1].x - last.x)
+            seam_yaw = math.atan2(math.sin(first_yaw - last_yaw), math.cos(first_yaw - last_yaw))
+            if seam_gap > 1.0 or abs(seam_yaw) > math.radians(20):
+                raise ValueError("loop_route requires connected endpoints and matching heading")
 
         half_window = int(rospy.get_param("~curvature_half_window_points", 1))
         smoothing_window = int(rospy.get_param("~curvature_smoothing_window", 5))
@@ -143,6 +155,24 @@ class CurvatureSpeedPurePursuitNode:
             initial_speed_mps=initial_speed_mps if initial_speed_mps > 0.0 else None,
             final_speed_mps=max(0.0, float(final_speed_kph)) / MPS_TO_KPH,
         )
+        if self.loop_route:
+            self.speed_profile = build_cyclic_speed_profile(
+                self.s_values, self.speed_curvatures,
+                max_speed_mps=self.max_speed_kph / MPS_TO_KPH,
+                lateral_accel_limit_mps2=float(rospy.get_param("~lateral_accel_limit_mps2", 1.0)),
+                max_accel_mps2=float(rospy.get_param("~max_accel_mps2", 1.0)),
+                max_decel_mps2=min(max_decel_mps2, float(rospy.get_param(
+                    "~curve_planning_decel_mps2", max_decel_mps2))),
+            )
+        self.preview_s_values = (self.s_values +
+                                 [self.total_length_m + s for s in self.s_values[1:]]
+                                 if self.loop_route else self.s_values)
+        self.lane_reference_points = (self.points + self.points[1:]
+                                      if self.loop_route else self.points)
+        self.preview_curvatures = (self.curvatures + self.curvatures[1:]
+                                   if self.loop_route else self.curvatures)
+        self.preview_speeds = (self.speed_profile + self.speed_profile[1:]
+                               if self.loop_route else self.speed_profile)
 
         self.wheelbase_m = float(rospy.get_param("~wheelbase_m", 3.0))
         self.lookahead_min_m = float(rospy.get_param("~lookahead_min_m", 4.0))
@@ -518,6 +548,10 @@ class CurvatureSpeedPurePursuitNode:
             return self.active_stopline_s is not None
 
     def search_projection(self, x: float, y: float):
+        if self.loop_route:
+            return nearest_projection_on_loop(
+                self.points, self.s_values, x, y,
+                self.last_segment_index, self.progress_search_window_points)
         if self.last_segment_index is None:
             return nearest_projection(self.points, self.s_values, x, y)
 
@@ -589,8 +623,8 @@ class CurvatureSpeedPurePursuitNode:
             self.lookahead_min_m + self.lookahead_gain * max(0.0, speed_mps),
         )
         preview_curvature = max_abs_curvature_ahead(
-            self.s_values,
-            curvatures,
+            self.preview_s_values if getattr(self, "loop_route", False) else self.s_values,
+            self.preview_curvatures if getattr(self, "loop_route", False) else curvatures,
             progress_s,
             max(curvature_preview_distance, nominal_lookahead),
             curvature_preview_step,
@@ -604,7 +638,9 @@ class CurvatureSpeedPurePursuitNode:
             tight_min_lookahead_m=tight_min_lookahead,
             max_lookahead_m=max_lookahead,
         )
-        target_s = min(self.total_length_m, progress_s + lookahead)
+        target_s = ((progress_s + lookahead) % self.total_length_m
+                    if getattr(self, "loop_route", False)
+                    else min(self.total_length_m, progress_s + lookahead))
         target, _ = interpolate_by_s(
             self.points,
             self.s_values,
@@ -624,10 +660,9 @@ class CurvatureSpeedPurePursuitNode:
         # Pursuit alone reacts after the vehicle has entered a tight bend;
         # blending this term starts the turn earlier without removing the
         # lateral-error feedback that recentres the vehicle on the path.
-        feedforward_s = min(
-            self.total_length_m,
-            progress_s + 0.75 * lookahead,
-        )
+        feedforward_s = ((progress_s + 0.75 * lookahead) % self.total_length_m
+                         if getattr(self, "loop_route", False)
+                         else min(self.total_length_m, progress_s + 0.75 * lookahead))
         path_curvature = profile_value_at_s(
             self.s_values, curvatures, feedforward_s
         )
@@ -718,16 +753,24 @@ class CurvatureSpeedPurePursuitNode:
                     center_s = self.last_progress_s if self.last_progress_s is not None else 0.0
                     start = max(0, bisect_left(self.s_values, center_s - radius) - 1)
                     end = min(len(self.points) - 2, bisect_right(self.s_values, center_s + radius))
-                    projection = nearest_projection(self.points, self.s_values,
-                                                    pose.position.x, pose.position.y, start, end)
-                    before, _ = interpolate_by_s(self.points, self.s_values, projection.progress_s - 0.75)
-                    after, _ = interpolate_by_s(self.points, self.s_values, projection.progress_s + 0.75)
+                    projection = (nearest_projection_on_loop(
+                        self.points, self.s_values, pose.position.x, pose.position.y,
+                        self.last_segment_index, max(15, int(3.0 * radius * len(self.points)
+                                                          / self.total_length_m)))
+                        if self.loop_route else nearest_projection(
+                            self.points, self.s_values, pose.position.x, pose.position.y,
+                            start, end))
+                    before, _ = interpolate_by_s(self.lane_reference_points,
+                                                 self.preview_s_values, projection.progress_s - 0.75)
+                    after, _ = interpolate_by_s(self.lane_reference_points,
+                                                self.preview_s_values, projection.progress_s + 0.75)
                     route_yaw = math.atan2(after.y - before.y, after.x - before.x)
                     pose_yaw = quaternion_to_yaw(q.x, q.y, q.z, q.w)
                     yaw_error = math.atan2(math.sin(route_yaw - pose_yaw), math.cos(route_yaw - pose_yaw))
                     if projection.distance_m > 1.5 or abs(yaw_error) > 0.6:
                         raise ValueError("off-route lane pose")
-                    reference = ideal_lane_reference(self.points, self.s_values, projection.progress_s)
+                    reference = ideal_lane_reference(self.lane_reference_points,
+                                                     self.preview_s_values, projection.progress_s)
                     if reference is None:
                         self.lane_assist.invalidate("route_reference_unavailable")
                         continue
@@ -890,14 +933,24 @@ class CurvatureSpeedPurePursuitNode:
         self.last_segment_index = projection.segment_index
         progress_s = projection.progress_s
         if self.last_progress_s is not None:
-            progress_s = max(progress_s, self.last_progress_s)
+            wrapping = (self.loop_route and self.last_progress_s > self.total_length_m - 10.0
+                        and progress_s < 10.0)
+            reverse_seam = (self.loop_route and self.last_progress_s < 10.0
+                            and progress_s > self.total_length_m - 10.0)
+            if wrapping:
+                rospy.loginfo("Curvature PP completed a lap; continuing from route start")
+            elif reverse_seam:
+                progress_s = self.last_progress_s
+                self.last_segment_index = 0
+            else:
+                progress_s = max(progress_s, self.last_progress_s)
         progress_s = min(progress_s, self.total_length_m)
         self.last_progress_s = progress_s
 
         remaining_m = max(0.0, self.total_length_m - progress_s)
-        stop = remaining_m <= self.goal_tolerance_m
+        stop = not self.loop_route and remaining_m <= self.goal_tolerance_m
         speed_limit = minimum_speed_ahead(
-            self.s_values, self.speed_profile, progress_s,
+            self.preview_s_values, self.preview_speeds, progress_s,
             measured_speed_mps * self.speed_preview_time_sec)
         stopline_cap_active = self.update_stopline_speed_cap(
             progress_s, self.latest_odom.header.stamp.to_sec(), now

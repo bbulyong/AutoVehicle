@@ -54,7 +54,7 @@ if [[ "$ACTION" == turn ]]; then
     mission)
       # Keep a 5 km/h margin below the mission ceiling. Curvature and the
       # spatial braking profile still slow the vehicle before tight turns.
-      preset=(MAX_SPEED_KPH=55.0 LATERAL_ACCEL_LIMIT_MPS2=0.9 MAX_ACCEL_MPS2=1.4 CURVE_PLANNING_DECEL_MPS2=1.2 SPEED_KP=0.45 SPEED_KI=0.05 STOPLINE_PLANNING_DECEL_MPS2=1.0)
+      preset=(MAX_SPEED_KPH=55.0 LATERAL_ACCEL_LIMIT_MPS2=3.8 MAX_ACCEL_MPS2=1.4 CURVE_PLANNING_DECEL_MPS2=1.2 SPEED_KP=0.45 SPEED_KI=0.05 STOPLINE_PLANNING_DECEL_MPS2=1.0)
       ;;
     *) echo 'Usage: bash run_test.sh turn {safe|mission}' >&2; exit 2 ;;
   esac

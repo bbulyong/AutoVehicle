@@ -26,6 +26,7 @@ from purepursuit_mgeo.longitudinal_controller import VehicleSpeedSource
 
 from curvature_speed_purepursuit.planner import (
     load_path_file, clean_consecutive_duplicates, cumulative_arc_lengths, nearest_projection,
+    nearest_projection_on_loop,
 )
 from stopline_control.core import AccelRiseLimiter, StopLineControllerCore, Sample, Decision, finite, clamp
 from turn_signal_controller.fusion import (
@@ -57,6 +58,16 @@ class ManeuverFusionNode:
         self.lock = threading.RLock()
         self.points = clean_consecutive_duplicates(load_path_file(rospy.get_param("~path_file")))
         self.s_values = cumulative_arc_lengths(self.points)
+        self.loop_route = bool(rospy.get_param("~loop_route", False))
+        if self.loop_route:
+            seam_gap = math.hypot(self.points[0].x - self.points[-1].x,
+                                  self.points[0].y - self.points[-1].y)
+            first, last = self.points[1], self.points[-2]
+            first_yaw = math.atan2(first.y - self.points[0].y, first.x - self.points[0].x)
+            last_yaw = math.atan2(self.points[-1].y - last.y, self.points[-1].x - last.x)
+            seam_yaw = math.atan2(math.sin(first_yaw - last_yaw), math.cos(first_yaw - last_yaw))
+            if seam_gap > 1.0 or abs(seam_yaw) > math.radians(20):
+                raise ValueError("loop_route requires connected endpoints and matching heading")
         self.timeout = float(rospy.get_param("~input_timeout_sec", 0.5))
         self.signal_timeout = float(rospy.get_param("~signal_timeout_sec", 0.8))
         self.vehicle_speed_topic = str(rospy.get_param("~vehicle_speed_topic", ""))
@@ -881,18 +892,53 @@ class ManeuverFusionNode:
                  else self.odometry_speed_mps)
         if not all(finite(v) for v in (x, y, speed)):
             return None
-        projection = nearest_projection(self.points, self.s_values, x, y,
-                                        start_segment=max(0, (self.segment or 0) - 250),
-                                        end_segment=None if self.segment is None else self.segment + 250)
+        projection = (nearest_projection_on_loop(self.points, self.s_values, x, y,
+                                                self.segment, 250)
+                      if self.loop_route else
+                      nearest_projection(self.points, self.s_values, x, y,
+                                         start_segment=max(0, (self.segment or 0) - 250),
+                                         end_segment=None if self.segment is None else self.segment + 250))
         if projection.distance_m > self.max_route_error:
             return None
+        length = self.s_values[-1]
+        wrapped = (self.loop_route and self.progress is not None
+                   and self.progress > length - 10.0 and projection.progress_s < 10.0)
+        reverse_seam = (self.loop_route and self.progress is not None
+                        and self.progress < 10.0 and projection.progress_s > length - 10.0)
         if self.last_projection is not None:
             previous_s, previous_time, previous_speed = self.last_projection
             dt = ros_now - previous_time
-            if dt < 0 or abs(projection.progress_s - previous_s) > max(speed, previous_speed) * dt + 2.0:
+            delta = (projection.progress_s + length - previous_s if wrapped else
+                     projection.progress_s - length - previous_s if reverse_seam else
+                     projection.progress_s - previous_s)
+            if dt < 0 or abs(delta) > max(speed, previous_speed) * dt + 2.0:
                 return None
-        if self.progress is not None and projection.progress_s < self.progress - 2.0:
+        if self.progress is not None and projection.progress_s < self.progress - 2.0 and not wrapped:
             return None  # Require restart after a teleport/backtrack, not replay old events.
+        if reverse_seam:
+            return speed  # Position noise cannot replay the previous lap.
+        if wrapped:
+            # A new lap must earn fresh junction and signal permissions.
+            self.event = None
+            self.completed.clear()
+            self.startup_inside_contexts.clear()
+            self.ignore_line_until_s = -1.0
+            self.enter_permission = False
+            self.entry_ticket = self.green_release = None
+            self.lead.reset()
+            self.core = StopLineControllerCore(**self.core_params)
+            self.next_guard_id = self.next_guard_core = None
+            self.confirmation.reset()
+            self.selection = Selection(reason="new_lap_awaiting_signal")
+            self.selection_stamp = 0.0
+            self.selection_context = None
+            self.signal_observations.clear()
+            self.route_object_observations.clear()
+            self.signal_queue_fault = None
+            self.samples.pop("signal", None)
+            self.samples.pop("objects", None)
+            self.samples.pop("line", None)
+            rospy.loginfo("Maneuver fusion completed a lap; reset junction permissions")
         if self.progress is None:
             # A fresh process may start after the rear axle has already passed
             # a mapped stop line. It must not reinterpret that line as a new

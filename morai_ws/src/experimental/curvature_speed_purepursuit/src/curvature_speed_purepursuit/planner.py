@@ -311,6 +311,29 @@ def nearest_projection(
     return best
 
 
+def nearest_projection_on_loop(
+    points: Sequence[PathPoint], s_values: Sequence[float], x: float, y: float,
+    last_segment: Optional[int], window_points: int,
+) -> PathProjection:
+    """Project locally, including both sides of a closed route's seam."""
+    if last_segment is None:
+        return nearest_projection(points, s_values, x, y)
+    count = len(points) - 1
+    window = max(1, min(int(window_points), count - 1))
+    first = last_segment - window
+    last = last_segment + window
+    ranges = [(max(0, first), min(count - 1, last))]
+    if first < 0:
+        ranges.append((max(0, count + first), count - 1))
+    if last >= count:
+        ranges.append((0, min(count - 1, last - count)))
+    projections = [nearest_projection(points, s_values, x, y, start, end)
+                   for start, end in ranges if start <= end]
+    return min(projections, key=lambda item: (item.distance_m,
+               min((item.segment_index - last_segment) % count,
+                   (last_segment - item.segment_index) % count)))
+
+
 def profile_value_at_s(
     s_values: Sequence[float], values: Sequence[float], query_s: float
 ) -> float:
@@ -493,3 +516,35 @@ def build_speed_profile(
         profile[index] = min(profile[index], reachable)
 
     return profile
+
+
+def build_cyclic_speed_profile(
+    s_values: Sequence[float],
+    curvatures: Sequence[float],
+    max_speed_mps: float,
+    lateral_accel_limit_mps2: float,
+    max_accel_mps2: float,
+    max_decel_mps2: float,
+) -> List[float]:
+    """Plan a closed route with braking and acceleration across its seam.
+
+    The middle of three identical laps has both a preceding and a following
+    lap, so neither the starting point nor the end point imposes a stop.
+    """
+    if len(s_values) != len(curvatures) or len(s_values) < 2 or s_values[-1] <= 0:
+        raise ValueError("Cyclic speed profile needs a nonempty route")
+    length = s_values[-1]
+    seam_curvature = max(abs(curvatures[0]), abs(curvatures[-1]))
+    lap_curvatures = list(curvatures)
+    lap_curvatures[0] = lap_curvatures[-1] = seam_curvature
+    extended_s = [lap * length + s for lap in range(3) for s in s_values]
+    extended_curvatures = lap_curvatures * 3
+    extended = build_speed_profile(
+        extended_s, extended_curvatures, max_speed_mps,
+        lateral_accel_limit_mps2, max_accel_mps2, max_decel_mps2,
+        final_speed_mps=max_speed_mps,
+    )
+    middle = extended[len(s_values):2 * len(s_values)]
+    seam_speed = min(middle[0], middle[-1])
+    middle[0] = middle[-1] = seam_speed
+    return middle
