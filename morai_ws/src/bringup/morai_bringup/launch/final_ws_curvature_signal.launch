@@ -67,7 +67,7 @@
   <arg name="lane_info_checkpoint" default="$(find camera_perception)/models/highway_best.pt" />
   <arg name="lane_info_cam_set" default="$(find camera_perception)/lane/cam_set.json" />
   <arg name="stopline_front_reference_offset_m" default="3.845" />
-  <arg name="stopline_hold_distance_m" default="12.0" />
+  <arg name="stopline_hold_distance_m" default="6.0" />
   <arg name="stopline_planning_decel_mps2" default="0.6" />
   <arg name="stopline_brake_ramp_distance_m" default="30.0" />
   <arg name="stopline_settle_distance_m" default="0.8" />

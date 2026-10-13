@@ -1410,8 +1410,10 @@ class ManeuverFusionNode:
             # It cannot erase permission already confirmed for this junction.
             # Safety faults below still revoke the ticket before publication.
             current_junction_released = decision.mode == "NOMINAL"
-            # The front bumper can reach a following line before the rear axle
-            # exits the active junction. Its old GREEN must not bypass that line.
+            current_green_released = decision.reason == "green"
+            # The next junction can be close to this turn. Plan a speed that
+            # still permits stopping at its mapped line, but leave the stop
+            # decision to that junction's own signal after route handoff.
             future = list(self.contexts if self.require_context else self.route_signal_contexts) + [
                 dict(id=m.identifier, start=m.start_s_m, end=m.end_s_m,
                                                 kind=m.kind) for m in self.manual]
@@ -1419,30 +1421,42 @@ class ManeuverFusionNode:
                              and c["id"] not in self.completed and c["start"] > event["start"]
                              and c["end"] > (self.progress or 0)), key=lambda c: c["start"])
             upcoming = future[0] if future else None
-            if (self.require_context or self.route_signal_contexts) and event and route_valid and upcoming:
-                if self.next_guard_id != upcoming["id"]:
-                    self.next_guard_id = upcoming["id"]
-                    self.next_guard_core = StopLineControllerCore(**self.core_params)
-                guard_distance = upcoming["start"] - self.progress
-                if upcoming.get("kind") == "lane_change":
-                    guard_distance += (self.core.front_reference_offset_m + self.core.hold_distance_m
-                                       - max(5., 4. + 0.35 * speed))
-                self.next_guard_core.observe_line(max(0., guard_distance),
-                                                  1., True, ros_now, now, ros_now,
-                                                  target_id=upcoming["id"])
-                self.next_guard_core.observe_signal("RED", 1., True, ros_now, now, ros_now)
-                guard = self.next_guard_core.update(now, ros_now, speed)
-                if guard.accel_limit < decision.accel_limit or guard.brake > decision.brake:
-                    decision = Decision(guard.mode, "next_junction_guard",
-                                        min(decision.accel_limit, guard.accel_limit),
-                                        max(decision.brake, guard.brake), guard.target_speed_kph, guard.distance_m)
+            if ((self.require_context or self.route_signal_contexts) and event
+                    and event.get("committed") and route_valid and upcoming
+                    and upcoming.get("kind") != "lane_change"
+                    and self.progress < event["end"]):
+                self.next_guard_id = upcoming["id"]
+                self.next_guard_core = None
+                a = self.core.planning_decel_mps2
+                tau = self.core.reaction_time_sec
+                # Bumper clearance and a small model-error reserve are kept
+                # even though this overlay never issues the future STOP.
+                available = (upcoming["start"] - self.progress
+                             - self.core.front_reference_offset_m
+                             - self.core.hold_distance_m - 2.0)
+                if available <= 0:
+                    decision = Decision("SAFE_STOP", "next_junction_spacing_unavailable",
+                                        0.0, 1.0, 0.0, available)
+                else:
+                    cap_mps = max(0.0, math.sqrt((a * tau)**2 + 2.0 * a * available) - a * tau)
+                    error = cap_mps - speed
+                    accel_limit = min(decision.accel_limit, clamp(error * 0.45, 0.0, 1.0))
+                    brake = max(decision.brake, clamp((-error - 0.25) * 0.30, 0.0, 1.0))
+                    cap_kph = cap_mps * 3.6
+                    target = (cap_kph if decision.target_speed_kph is None else
+                              min(decision.target_speed_kph, cap_kph))
+                    reason = ("next_junction_speed_envelope"
+                              if accel_limit < decision.accel_limit or brake > decision.brake
+                              else decision.reason)
+                    decision = Decision(decision.mode, reason, accel_limit, brake,
+                                        target, available)
             else:
                 self.next_guard_id = self.next_guard_core = None
             # An allowed arrow controls entry, not cornering speed. Retain the
             # original core mode so a speed limit cannot erase an entry ticket.
             decision = motion.constrain(decision)
             released_context_id = (event["id"] if self.route_camera_calibrated
-                                   and event and permitted and decision.reason == "green"
+                                   and event and permitted and current_green_released
                                    else None)
             decision = self.constrain_route_speed(decision, speed, released_context_id)
             reasons = [motion.fault] if motion.fault else []

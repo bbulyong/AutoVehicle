@@ -4,10 +4,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 WS="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
 ACTION="${1:-show}"
-if [[ $# -gt 2 || ! "$ACTION" =~ ^(show|monitor|drive|diagnose|speed|lane|turn|models|request-merge|view|rviz)$ ]] ||
+if [[ $# -gt 2 || ! "$ACTION" =~ ^(show|monitor|drive|diagnose|speed|clearance|lane|turn|models|request-merge|view|rviz)$ ]] ||
    [[ "$ACTION" =~ ^(models|request-merge|view|rviz)$ && $# -gt 1 ]] ||
    [[ "$ACTION" == diagnose && $# -gt 1 && "$2" != 2 ]]; then
-  echo 'Usage: bash run_test.sh {show|monitor|drive} [1-5]; or {speed KMH|lane on/off|turn safe/mission|models|request-merge|diagnose [2]|view|rviz}' >&2
+  echo 'Usage: bash run_test.sh {show|monitor|drive} [1-5]; or {speed KMH|clearance METERS|lane on/off|turn safe/mission|models|request-merge|diagnose [2]|view|rviz}' >&2
   exit 2
 fi
 if [[ ! -f "$SCRIPT_DIR/highway.env" || ! -f "$SCRIPT_DIR/highway-test.env" ]]; then
@@ -45,6 +45,20 @@ if [[ "$ACTION" == speed ]]; then
   echo "MAX_SPEED_KPH=$VALUE saved. Restart the driving launch to apply; no live parameter was changed."
   exit 0
 fi
+if [[ "$ACTION" == clearance ]]; then
+  VALUE="${2:-}"
+  [[ "$VALUE" =~ ^[0-9]+([.][0-9]+)?$ && "$VALUE" =~ [1-9] ]] || {
+    echo 'Usage: bash run_test.sh clearance METERS (positive front-bumper clearance, e.g. 6)' >&2; exit 2;
+  }
+  cp -p "$SCRIPT_DIR/highway-test.env" "$SCRIPT_DIR/highway-test.env.bak"
+  if grep -q '^STOPLINE_HOLD_DISTANCE_M=' "$SCRIPT_DIR/highway-test.env"; then
+    sed -i "s/^STOPLINE_HOLD_DISTANCE_M=.*/STOPLINE_HOLD_DISTANCE_M=$VALUE/" "$SCRIPT_DIR/highway-test.env"
+  else
+    printf '\nSTOPLINE_HOLD_DISTANCE_M=%s\n' "$VALUE" >> "$SCRIPT_DIR/highway-test.env"
+  fi
+  echo "Front-bumper stopline clearance $VALUE m saved. Restart the driving launch to apply."
+  exit 0
+fi
 if [[ "$ACTION" == turn ]]; then
   case "${2:-}" in
     safe)
@@ -59,7 +73,7 @@ if [[ "$ACTION" == turn ]]; then
     *) echo 'Usage: bash run_test.sh turn {safe|mission}' >&2; exit 2 ;;
   esac
   cp -p "$SCRIPT_DIR/highway-test.env" "$SCRIPT_DIR/highway-test.env.bak"
-  for entry in "${preset[@]}" SPEED_ERROR_DEADBAND_KPH=0.5 PEDAL_ACCEL_RISE_RATE_PER_SEC=0.7 PEDAL_BRAKE_RISE_RATE_PER_SEC=1.5 PEDAL_RELEASE_RATE_PER_SEC=2.0 MAX_STEERING_RATE_RAD_S=1.2 LOOKAHEAD_GAIN=0.25 STEERING_FEEDFORWARD_WEIGHT=0.35 STOPLINE_APPROACH_SPEED_KPH=30.0 STOPLINE_HOLD_DISTANCE_M=12.0 STOPLINE_BRAKE_RAMP_DISTANCE_M=30.0 STOPLINE_SETTLE_DISTANCE_M=0.8; do
+  for entry in "${preset[@]}" SPEED_ERROR_DEADBAND_KPH=0.5 PEDAL_ACCEL_RISE_RATE_PER_SEC=0.7 PEDAL_BRAKE_RISE_RATE_PER_SEC=1.5 PEDAL_RELEASE_RATE_PER_SEC=2.0 MAX_STEERING_RATE_RAD_S=1.2 LOOKAHEAD_GAIN=0.25 STEERING_FEEDFORWARD_WEIGHT=0.35 STOPLINE_APPROACH_SPEED_KPH=30.0 STOPLINE_HOLD_DISTANCE_M=6.0 STOPLINE_BRAKE_RAMP_DISTANCE_M=30.0 STOPLINE_SETTLE_DISTANCE_M=0.8; do
     name="${entry%%=*}"
     value="${entry#*=}"
     if grep -q "^${name}=" "$SCRIPT_DIR/highway-test.env"; then
@@ -68,7 +82,7 @@ if [[ "$ACTION" == turn ]]; then
       printf '\n%s=%s\n' "$name" "$value" >> "$SCRIPT_DIR/highway-test.env"
     fi
   done
-  echo "Turn/intersection preset ${2} saved: straight ceiling ${preset[0]#*=} km/h, mapped stopline approach 30 km/h, clearance 12.0 m."
+  echo "Turn/intersection preset ${2} saved: straight ceiling ${preset[0]#*=} km/h, mapped stopline approach 30 km/h, clearance 6.0 m."
   echo 'Restart the driving launch to apply; no live parameter was changed. Previous settings: highway-test.env.bak'
   exit 0
 fi

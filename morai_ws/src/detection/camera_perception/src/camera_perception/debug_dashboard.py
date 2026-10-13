@@ -30,6 +30,8 @@ EXPLANATIONS = {
     'unassociated_visible_signal': '신호등은 검출됐지만 진행 경로의 신호등으로 연결되지 않았습니다.',
     'unmapped_signal_or_stopline': '지도 경로와 연결되지 않은 신호등·정지선이 감지됐습니다.',
     'entry_without_current_permission': '유효한 신호 허가 없이 교차로 진입 경계를 넘었습니다.',
+    'next_junction_speed_envelope': '현재 교차로를 통과하면서 다음 정지선에 대비해 속도를 낮춥니다. 다음 신호의 정지·통과 판단은 현재 회전이 끝난 뒤 적용합니다.',
+    'next_junction_spacing_unavailable': '두 교차로 사이에 충분한 제동 거리가 없어 안전 정지합니다.',
 }
 
 
