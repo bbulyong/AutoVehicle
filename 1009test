@@ -1,3 +1,12 @@
+cd ~/AutoVehicle
+git diff --binary HEAD > "$HOME/AutoVehicle-local-$(date +%Y%m%d-%H%M%S).patch"
+git stash push -m "before-final_ws-update"
+git pull --ff-only origin final_ws
+git rev-parse --short HEAD
+
+
+
+
 cd ~/AutoVehicle/morai_ws/docker/final_ws
 nano highway.env
 파일에서 다음처럼 설정하세요.
