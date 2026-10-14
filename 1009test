@@ -1,5 +1,11 @@
 cd ~/AutoVehicle/morai_ws/docker/final_ws
 grep -E '^(UBUNTU_IP|MORAI_IP|CONTAINER_NAME)=' highway.env
+bash run_test.sh show 2 | grep -E '^(Profile=|Ubuntu=|Launch=)'
+docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' morai-highway-153-net10 | grep -E '^(ROS_IP|ROS_MASTER_URI|MORAI_IP)='
+
+
+cd ~/AutoVehicle/morai_ws/docker/final_ws
+grep -E '^(UBUNTU_IP|MORAI_IP|CONTAINER_NAME)=' highway.env
 
 bash run_highway.sh stop
 bash install_curvature_signal.sh --config
