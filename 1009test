@@ -1,10 +1,14 @@
-cp ~/AutoVehicle/morai_ws/docker/final_ws/highway.env morai_ws/docker/final_ws/
-cp ~/AutoVehicle/morai_ws/docker/final_ws/highway-test.env morai_ws/docker/final_ws/
-nano morai_ws/docker/final_ws/highway.env
-highway.env에서 다음 세 값을 설정하세요.
+cd ~/AutoVehicle/morai_ws/docker/final_ws
+nano highway.env
+파일에서 다음처럼 설정하세요.
 UBUNTU_IP=192.168.10.21
 MORAI_IP=192.168.10.14
 CONTAINER_NAME=morai-highway-153-net10
+컨테이너 이름은 기존에 사용하지 않은 이름이어야 합니다. 기존 컨테이너를 다시 시작하면 그 안의 예전 IP 설정이 그대로 남기 때문입니다. 기존 주행을 종료한 뒤, 새 컨테이너에는 아래 순서로 코드를 설치하세요.
+bash run_highway.sh start
+bash run_highway.sh stop
+bash install_curvature_signal.sh
+bash run_highway.sh start
 
 cd ~/AutoVehicle
 git pull --ff-only origin final_ws
