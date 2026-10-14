@@ -1,3 +1,8 @@
+ip조절
+cp ~/AutoVehicle/morai_ws/docker/final_ws/highway.env morai_ws/docker/final_ws/
+cp ~/AutoVehicle/morai_ws/docker/final_ws/highway-test.env morai_ws/docker/final_ws/
+nano morai_ws/docker/final_ws/highway.env
+
 cd ~/AutoVehicle
 git pull --ff-only origin final_ws
 git rev-parse --short HEAD   # 6fc1014 확인
