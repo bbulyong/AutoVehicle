@@ -1,3 +1,9 @@
+bash run_highway.sh stop
+bash install_curvature_signal.sh --config
+bash run_highway.sh start
+bash run_test.sh show 2
+bash run_test.sh drive 2
+
 cd ~/AutoVehicle
 git diff --binary HEAD > "$HOME/AutoVehicle-local-$(date +%Y%m%d-%H%M%S).patch"
 git stash push -m "before-final_ws-update"
