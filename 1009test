@@ -1,7 +1,10 @@
-ip조절
 cp ~/AutoVehicle/morai_ws/docker/final_ws/highway.env morai_ws/docker/final_ws/
 cp ~/AutoVehicle/morai_ws/docker/final_ws/highway-test.env morai_ws/docker/final_ws/
 nano morai_ws/docker/final_ws/highway.env
+highway.env에서 다음 세 값을 설정하세요.
+UBUNTU_IP=192.168.10.21
+MORAI_IP=192.168.10.14
+CONTAINER_NAME=morai-highway-153-net10
 
 cd ~/AutoVehicle
 git pull --ff-only origin final_ws
