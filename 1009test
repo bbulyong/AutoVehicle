@@ -1,3 +1,20 @@
+cd ~/AutoVehicle
+git pull --ff-only origin final_ws
+git rev-parse --short HEAD   # 6fc1014 확인
+cd morai_ws/docker/final_ws
+bash run_highway.sh stop
+bash install_curvature_signal.sh
+bash run_highway.sh start
+bash run_test.sh clearance 6
+bash run_test.sh show 2
+
+
+별도 터미널에서 주행을 시작하세요.
+cd ~/AutoVehicle/morai_ws/docker/final_ws
+bash run_test.sh drive 2
+
+
+
 cd ~/AutoVehicle-finalws-20261012
 git fetch origin final_ws
 git switch --detach origin/final_ws
