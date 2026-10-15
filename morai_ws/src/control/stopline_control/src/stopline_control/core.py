@@ -364,9 +364,12 @@ class StopLineControllerCore:
         brake = 0.0
         accel_limit = clamp((target - speed_mps) * 3.6 * 0.2, 0.0, 1.0)
         if (remaining <= braking_distance + self.trigger_margin_m
-                + self.brake_ramp_distance_m and speed_mps > 0.15):
+                + self.brake_ramp_distance_m and speed_mps > target + 0.15):
             effective = max(remaining - speed_mps * tau, 0.05)
-            required_decel = speed_mps**2 / (2.0 * effective)
+            # Brake only for speed above the stopping envelope. Braking at
+            # every tick inside the ramp also suppresses the accelerator when
+            # the car is already below target, causing a long 1-2 km/h crawl.
+            required_decel = (speed_mps**2 - target**2) / (2.0 * effective)
             ramp = (1.0 if self.brake_ramp_distance_m == 0 else clamp(
                 (braking_distance + self.trigger_margin_m
                  + self.brake_ramp_distance_m - remaining)
