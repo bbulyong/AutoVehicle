@@ -1,7 +1,20 @@
 cd ~/AutoVehicle/morai_ws/docker/final_ws
-grep -E '^(UBUNTU_IP|MORAI_IP|CONTAINER_NAME)=' highway.env
-bash run_test.sh show 2 | grep -E '^(Profile=|Ubuntu=|Launch=)'
-docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' morai-highway-153-net10 | grep -E '^(ROS_IP|ROS_MASTER_URI|MORAI_IP)='
+nano highway.env
+
+들어가서 , 위에 3개줄 수정하면 됨.
+
+UBUNTU_IP=192.168.10.21
+MORAI_IP=192.168.10.14
+CONTAINER_NAME=morai-highway-net10-20261015
+
+아마 숫자 추가 혹은 수정만 하고, ctrl+o -> enter -> ctrl+x 누르면 나올수있음
+나온 뒤에
+
+bash run_highway.sh start
+bash run_highway.sh stop
+bash install_curvature_signal.sh --config
+bash run_highway.sh start
+했을 때 Installed and verified 뜨는지 혹은 결과 사진점.
 
 
 cd ~/AutoVehicle/morai_ws/docker/final_ws
