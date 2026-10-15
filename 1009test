@@ -3,7 +3,7 @@ nano highway.env
 
 들어가서 , 위에 3개줄 수정하면 됨.
 
-UBUNTU_IP=192.168.10.21
+UBUNTU_IP=192.168.10.21   아마 192.168.0.21 < 이렇게되어있을거임 0->10으로좀 밑에도마찬가지
 MORAI_IP=192.168.10.14
 CONTAINER_NAME=morai-highway-net10-20261015
 
