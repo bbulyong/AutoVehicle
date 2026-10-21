@@ -1430,7 +1430,7 @@ class ManeuverFusionNode:
             # its light and stop line no longer govern this crossing. Route,
             # obstacle and upstream-command safety checks still apply below.
             decision = (Decision("NOMINAL", "junction_entered")
-                        if committed and self.route_signal_contexts else
+                        if committed and event and event["kind"] == "turn" else
                         self.core.update(now, ros_now, speed,
                                          permission_pending=signal_frame_pending))
             # A later junction may impose an APPROACH speed/brake overlay.

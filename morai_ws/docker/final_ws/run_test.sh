@@ -4,10 +4,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 WS="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
 ACTION="${1:-show}"
-if [[ $# -gt 2 || ! "$ACTION" =~ ^(show|monitor|drive|diagnose|speed|clearance|lane|turn|models|request-merge|view|rviz)$ ]] ||
+if [[ $# -gt 2 || ! "$ACTION" =~ ^(show|monitor|drive|diagnose|speed|clearance|approach|lane|turn|models|request-merge|view|rviz)$ ]] ||
    [[ "$ACTION" =~ ^(models|request-merge|view|rviz)$ && $# -gt 1 ]] ||
    [[ "$ACTION" == diagnose && $# -gt 1 && "$2" != 2 ]]; then
-  echo 'Usage: bash run_test.sh {show|monitor|drive} [1-5]; or {speed KMH|clearance METERS|lane on/off|turn safe/mission|models|request-merge|diagnose [2]|view|rviz}' >&2
+  echo 'Usage: bash run_test.sh {show|monitor|drive} [1-5]; or {speed KMH|clearance METERS|approach smooth|lane on/off|turn safe/mission|models|request-merge|diagnose [2]|view|rviz}' >&2
   exit 2
 fi
 if [[ ! -f "$SCRIPT_DIR/highway.env" || ! -f "$SCRIPT_DIR/highway-test.env" ]]; then
@@ -59,6 +59,27 @@ if [[ "$ACTION" == clearance ]]; then
   echo "Front-bumper stopline clearance $VALUE m saved. Restart the driving launch to apply."
   exit 0
 fi
+if [[ "$ACTION" == approach ]]; then
+  [[ "${2:-}" == smooth ]] || {
+    echo 'Usage: bash run_test.sh approach smooth' >&2; exit 2;
+  }
+  # Updating the checkout does not replace the user's saved env. Apply this
+  # preset explicitly so older 0.6/30 m settings cannot override the new tune.
+  PLANNING_DECEL="$(awk -v maximum="$MAX_DECEL_MPS2" 'BEGIN {if (maximum <= 0) exit 1; print (maximum < 1.2 ? maximum : 1.2)}')"
+  cp -p "$SCRIPT_DIR/highway-test.env" "$SCRIPT_DIR/highway-test.env.bak"
+  for entry in STOPLINE_HOLD_DISTANCE_M=0.5 "STOPLINE_PLANNING_DECEL_MPS2=$PLANNING_DECEL" STOPLINE_BRAKE_RAMP_DISTANCE_M=0.0 STOPLINE_SETTLE_DISTANCE_M=0.15; do
+    name="${entry%%=*}"
+    value="${entry#*=}"
+    if grep -q "^${name}=" "$SCRIPT_DIR/highway-test.env"; then
+      sed -i "s/^${name}=.*/${name}=${value}/" "$SCRIPT_DIR/highway-test.env"
+    else
+      printf '\n%s=%s\n' "$name" "$value" >> "$SCRIPT_DIR/highway-test.env"
+    fi
+  done
+  echo "Progressive stop approach saved: planning deceleration $PLANNING_DECEL m/s^2, front-bumper clearance 0.5 m."
+  echo 'Restart the driving launch to apply. Previous settings: highway-test.env.bak'
+  exit 0
+fi
 if [[ "$ACTION" == turn ]]; then
   case "${2:-}" in
     safe)
@@ -68,12 +89,12 @@ if [[ "$ACTION" == turn ]]; then
     mission)
       # Keep a 5 km/h margin below the mission ceiling. Curvature and the
       # spatial braking profile still slow the vehicle before tight turns.
-      preset=(MAX_SPEED_KPH=55.0 LATERAL_ACCEL_LIMIT_MPS2=3.8 MAX_ACCEL_MPS2=1.4 CURVE_PLANNING_DECEL_MPS2=1.2 SPEED_KP=0.45 SPEED_KI=0.05 STOPLINE_PLANNING_DECEL_MPS2=1.0)
+      preset=(MAX_SPEED_KPH=55.0 LATERAL_ACCEL_LIMIT_MPS2=3.8 MAX_ACCEL_MPS2=1.4 CURVE_PLANNING_DECEL_MPS2=1.2 SPEED_KP=0.45 SPEED_KI=0.05 STOPLINE_PLANNING_DECEL_MPS2=1.2)
       ;;
     *) echo 'Usage: bash run_test.sh turn {safe|mission}' >&2; exit 2 ;;
   esac
   cp -p "$SCRIPT_DIR/highway-test.env" "$SCRIPT_DIR/highway-test.env.bak"
-  for entry in "${preset[@]}" SPEED_ERROR_DEADBAND_KPH=0.5 PEDAL_ACCEL_RISE_RATE_PER_SEC=0.7 PEDAL_BRAKE_RISE_RATE_PER_SEC=1.5 PEDAL_RELEASE_RATE_PER_SEC=2.0 MAX_STEERING_RATE_RAD_S=1.2 LOOKAHEAD_GAIN=0.25 STEERING_FEEDFORWARD_WEIGHT=0.35 STOPLINE_APPROACH_SPEED_KPH=30.0 STOPLINE_HOLD_DISTANCE_M=6.0 STOPLINE_BRAKE_RAMP_DISTANCE_M=30.0 STOPLINE_SETTLE_DISTANCE_M=0.8; do
+  for entry in "${preset[@]}" SPEED_ERROR_DEADBAND_KPH=0.5 PEDAL_ACCEL_RISE_RATE_PER_SEC=0.7 PEDAL_BRAKE_RISE_RATE_PER_SEC=1.5 PEDAL_RELEASE_RATE_PER_SEC=2.0 MAX_STEERING_RATE_RAD_S=1.2 LOOKAHEAD_GAIN=0.25 STEERING_FEEDFORWARD_WEIGHT=0.35 STOPLINE_APPROACH_SPEED_KPH=30.0 STOPLINE_HOLD_DISTANCE_M=0.5 STOPLINE_BRAKE_RAMP_DISTANCE_M=0.0 STOPLINE_SETTLE_DISTANCE_M=0.15; do
     name="${entry%%=*}"
     value="${entry#*=}"
     if grep -q "^${name}=" "$SCRIPT_DIR/highway-test.env"; then
@@ -82,7 +103,7 @@ if [[ "$ACTION" == turn ]]; then
       printf '\n%s=%s\n' "$name" "$value" >> "$SCRIPT_DIR/highway-test.env"
     fi
   done
-  echo "Turn/intersection preset ${2} saved: straight ceiling ${preset[0]#*=} km/h, mapped stopline approach 30 km/h, clearance 6.0 m."
+  echo "Turn/intersection preset ${2} saved: straight ceiling ${preset[0]#*=} km/h, mapped stopline approach 30 km/h, clearance 0.5 m."
   echo 'Restart the driving launch to apply; no live parameter was changed. Previous settings: highway-test.env.bak'
   exit 0
 fi

@@ -505,16 +505,19 @@ class StrictFusionTest(unittest.TestCase):
         self.assertEqual(output.brake, 1.)
 
     def test_following_line_stops_bumper_before_current_rear_axle_exit(self):
-        self.context.update(start=80., end=90., stop_s=80.)
+        self.context.update(start=80., end=104., stop_s=80.)
         self.node.event = dict(self.context, committed=True, kind="turn")
-        self.node.contexts.append(dict(self.context, id="next", start=91., stop_s=91., end=120.))
+        self.node.contexts.append(dict(self.context, id="next", start=105., stop_s=105., end=130.))
         for _ in range(120):
             output, _ = self.frame("LEFT")
         self.assertEqual(output.brake, 0.)
-        output, status = self.frame("RED", x=86.655)
+        # Keep the pose stream consistent with the 2 m/s odometry; jumping
+        # twelve metres in one tick correctly fails the localization guard.
+        for tick in range(1, 121):
+            output, status = self.frame("RED", x=85.655 + 0.1 * tick)
         self.assertEqual(status["next_junction_guard_id"], "next")
         self.assertEqual(output.brake, 1.)
-        self.assertLess(status["progress_s_m"] + 3.845, 91.)
+        self.assertLess(status["progress_s_m"] + 3.845, 105.)
 
     def test_visible_known_junction_prearms_without_early_lamp(self):
         output, status = self.frame("LEFT", x=10.)
@@ -555,12 +558,16 @@ class StrictFusionTest(unittest.TestCase):
         self.assertIsNone(status["event"])
         self.assertEqual(output.brake, 0.)
 
-    def test_next_guard_exists_before_commit_and_includes_manual_change(self):
+    def test_future_lane_change_does_not_preempt_current_intersection(self):
         self.node.manual = self.fixture.module.parse_maneuvers([
             dict(id="next_change", start_s_m=126., end_s_m=140., direction="LEFT", kind="lane_change")])
         output, status = self.frame("RED")
         self.assertFalse(status["event"]["committed"])
-        self.assertEqual(status["next_junction_guard_id"], "next_change")
+        # A future maneuver is not another signal stop for this junction.
+        # Its own entry/gap checks take over after route-event handoff.
+        self.assertIsNone(status["next_junction_guard_id"])
+        self.assertEqual(status["event"]["id"], "junction")
+        self.assertEqual(self.node.manual[0].identifier, "next_change")
 
     def authorize(self):
         for _ in range(120):

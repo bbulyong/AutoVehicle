@@ -363,18 +363,19 @@ class StopLineControllerCore:
 
         brake = 0.0
         accel_limit = clamp((target - speed_mps) * 3.6 * 0.2, 0.0, 1.0)
-        if (remaining <= braking_distance + self.trigger_margin_m
-                + self.brake_ramp_distance_m and speed_mps > target + 0.15):
+        if speed_mps > target + 0.02:
             effective = max(remaining - speed_mps * tau, 0.05)
-            # Brake only for speed above the stopping envelope. Braking at
-            # every tick inside the ramp also suppresses the accelerator when
-            # the car is already below target, causing a long 1-2 km/h crawl.
-            required_decel = (speed_mps**2 - target**2) / (2.0 * effective)
-            ramp = (1.0 if self.brake_ramp_distance_m == 0 else clamp(
-                (braking_distance + self.trigger_margin_m
-                 + self.brake_ramp_distance_m - remaining)
-                / self.brake_ramp_distance_m, 0.0, 1.0))
-            brake = clamp(required_decel * ramp / self.max_decel_mps2, 0.0, 1.0)
+            # Track the distance-based speed curve. A small speed error starts
+            # with a small pedal request; an early detection alone never asks
+            # for braking. Below the curve, throttle is available again.
+            required_decel = speed_mps**2 / (2.0 * effective)
+            correction_decel = 3.0 * (speed_mps - target)
+            brake = clamp(min(required_decel, correction_decel)
+                          / self.max_decel_mps2, 0.0, 1.0)
+            # If even maximum braking needs the remaining distance, stop
+            # softening the pedal. This also covers late RED observations.
+            if speed_mps**2 / (2.0 * self.max_decel_mps2) >= remaining:
+                brake = 1.0
             accel_limit = 0.0
         return Decision("APPROACH", "stopline_speed_envelope", accel_limit, brake,
                         target * 3.6, self.distance)

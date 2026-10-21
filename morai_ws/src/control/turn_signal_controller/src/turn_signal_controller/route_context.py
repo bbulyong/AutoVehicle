@@ -447,7 +447,9 @@ def load_route_contexts(mgeo_dir, points, s_values):
                 raise ValueError("Car signal references an unknown link: " + link_id)
             bindings[link_id].append(dict(
                 id=identifier, x=point[0], y=point[1], z=point[2],
-                **({"facing_yaw_deg": signal["heading"]} if signal.get("heading") is not None else {})))
+                **({"facing_yaw_deg": signal["heading"]}
+                   if isinstance(signal.get("heading"), (int, float))
+                   and math.isfinite(signal["heading"]) else {})))
     matches = {identifier: _match_link(identifier, link["geometry"], route)
                for identifier, link in links.items()}
     all_matches = [match for group in matches.values() for match in group]

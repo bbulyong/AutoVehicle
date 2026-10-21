@@ -79,7 +79,9 @@ class StopLineWiringTest(unittest.TestCase):
         self.node.odom_callback(self.odometry())
         self.node.signal_callback(Message(state="RED", valid=True, confidence=1.,
                                           header=NS(stamp=Stamp(self.now), frame_id="camera_link")))
-        self.node.stopline_callback(Message(distance_m=4., valid=True, confidence=1.,
+        # At 2 m/s, 3 m is just inside the stopping-speed curve. A farther
+        # detection should permit approach throttle instead of partial brake.
+        self.node.stopline_callback(Message(distance_m=3., valid=True, confidence=1.,
                                             header=NS(stamp=Stamp(self.now), frame_id="base_link")))
         self.node.publish_command(None)
         return self.node.output_pub.publish.call_args.args[0]

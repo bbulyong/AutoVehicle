@@ -137,9 +137,12 @@ bash run_test.sh monitor 2
 - 평상시 페달 변화율: `PEDAL_ACCEL_RISE_RATE_PER_SEC`, `PEDAL_BRAKE_RISE_RATE_PER_SEC`, `PEDAL_RELEASE_RATE_PER_SEC`
 - 지정 MGeo 정지선 접근 속도: `STOPLINE_APPROACH_SPEED_KPH` (기본 30 km/h), 런치 인자 `mapped_stopline_approach_distance_m` (기본 80 m)
 - 정지선 기준점 보정: `STOPLINE_FRONT_REFERENCE_OFFSET_M` — 앞 범퍼 위치 실측값을 사용한다.
-- 정지선 여유 거리: `STOPLINE_HOLD_DISTANCE_M` (앞범퍼 기준 7 m)
+- 정지선 여유 거리: `STOPLINE_HOLD_DISTANCE_M` (앞범퍼 기준 0.5 m)
 - 정지 접근 제동: `STOPLINE_PLANNING_DECEL_MPS2`, `STOPLINE_BRAKE_RAMP_DISTANCE_M`, `STOPLINE_SETTLE_DISTANCE_M`
 - CAM1과 MGeo 정지선 허용 오차: `config/curvature_signal.yaml`의 `route_stopline_match_tolerance_m`. 신호 허가가 나지 않으면 `mapped_stopline_confirmed`, `event.stopline_match_error_m`, `route_cam4_candidate_count`, `signal_selection_reason`을 먼저 확인한다.
 - 신호 유효 시간: `config/curvature_signal.yaml`의 `signal_timeout_sec`. CAM1 정지선은 MGeo 위치와 대조해 확인한다.
 
-이 코드는 카메라 신호등과 지도 신호등을 직접 대응시키지 않는다. CAM4가 잘못 검출한 단일 후보는 여전히 통과 판단에 영향을 줄 수 있으므로 `monitor`로 실제 교차로별 동작을 확인한다.
+현재 2번 구성은 보정된 CAM4 영상과 현재 경로의 MGeo 신호등 투영을 대응시킨다.
+거리별 목표속도로 정지선에 접근하는 설정과 적용 절차는
+[정지선 접근 변경 안내](STOPLINE_APPROACH_20261021_KO.md)를 따른다.
+기존 저장값을 바꾸려면 `bash run_test.sh approach smooth`를 한 번 실행한다.
