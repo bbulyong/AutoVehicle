@@ -1,3 +1,16 @@
+cd ~/AutoVehicle_new_final_ws
+git pull --ff-only origin new_final_ws
+
+cd morai_ws/docker/final_ws
+bash run_highway.sh stop
+bash install_curvature_signal.sh --config
+bash run_highway.sh start
+
+bash run_test.sh lane on
+bash run_test.sh show 2
+bash run_test.sh drive 2
+
+
 cd ~/AutoVehicle_new_final_ws/morai_ws/docker/final_ws
 nano highway.env
 파일에서 다음을 확인·수정하세요. IMAGE_NAME은 PC에 이미 있는 ROS 이미지 이름을 사용합니다.
