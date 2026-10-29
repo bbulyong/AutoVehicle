@@ -1,5 +1,50 @@
 # 회전교차로 코드 핵심 실행 명령
 
+## 이미 클론했고 Docker 빌드가 실패한 경우
+
+`check_highway_launch.py`에서 정상 회전교차로 LiDAR 노드를 잘못 차단하던 문제는
+`b0d68ff`에서 수정됐다. 기존 작업 폴더에서 최신 코드를 받은 뒤 다시 빌드한다.
+
+```bash
+cd ~/AutoVehicle_roundabout
+git pull --ff-only
+git log -1 --oneline
+
+cd morai_ws/docker/final_ws
+python3 fetch_highway_model.py
+
+set -o pipefail
+BUILDKIT_PROGRESS=plain bash run_highway.sh build \
+  2>&1 | tee ~/roundabout-build.log
+BUILD_EXIT=${PIPESTATUS[0]}
+echo "BUILD_EXIT=$BUILD_EXIT"
+```
+
+`BUILD_EXIT=0`일 때만 다음 명령을 실행한다.
+
+```bash
+bash run_highway.sh start
+bash run_highway.sh stop
+bash install_curvature_signal.sh --config
+bash run_highway.sh start
+
+bash run_test.sh show 2
+bash run_test.sh monitor 2
+```
+
+`monitor 2`에서 센서 수신과 `RUNTIME_MATCH`를 확인한 뒤 `Ctrl+C`로 종료하고
+실제 주행을 시작한다.
+
+```bash
+bash run_test.sh drive 2
+```
+
+빌드가 다시 실패하면 후속 명령을 실행하지 말고 로그 끝부분을 확인한다.
+
+```bash
+tail -n 200 ~/roundabout-build.log
+```
+
 ## 1. 기존 주행 종료
 
 ```bash
@@ -31,10 +76,11 @@ nano highway.env
 UBUNTU_IP=192.168.10.21
 MORAI_IP=192.168.10.14
 CONTAINER_NAME=morai-roundabout-net10
-IMAGE_NAME=morai-final:highway
+IMAGE_NAME=morai-roundabout:test
 ```
 
-`IMAGE_NAME`은 `docker images`에 표시되는 기존 ROS 이미지 이름과 맞춘다.
+별도로 호환성을 확인한 기존 AutoVehicle 이미지가 없다면 위 전용 이미지 이름을
+그대로 사용해 새로 빌드한다. 이름이 비슷한 `morai-v61:cpu`로 임의 변경하지 않는다.
 
 ## 4. 모델과 Docker 이미지 확인
 
