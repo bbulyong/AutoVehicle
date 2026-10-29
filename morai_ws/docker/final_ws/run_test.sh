@@ -18,6 +18,14 @@ source "$SCRIPT_DIR/highway.env"
 # The versioned example supplies defaults for fields added by later updates.
 source "$SCRIPT_DIR/highway-test.env.example"
 source "$SCRIPT_DIR/highway-test.env"
+# new_final_ws: saved legacy EGO_STATUS_PORT must not select the old input.
+COMPETITION_STATUS_PORT="${COMPETITION_STATUS_PORT:-9081}"
+[[ "$COMPETITION_STATUS_PORT" =~ ^[0-9]{4,5}$ ]] &&
+  (( 10#$COMPETITION_STATUS_PORT >= 1000 && 10#$COMPETITION_STATUS_PORT <= 65535 )) || {
+  echo 'COMPETITION_STATUS_PORT must be 1000..65535' >&2; exit 2;
+}
+EGO_STATUS_PORT="$COMPETITION_STATUS_PORT"
+
 source "$SCRIPT_DIR/curvature_runtime_files.sh"
 if [[ "$ACTION" == view ]]; then
   exec bash "$SCRIPT_DIR/open_camera_dashboard.sh"
@@ -268,6 +276,7 @@ if [[ "$TEST_PROFILE" == curvature_signal ]]; then
   echo "Lane_centering=${LANE_CENTERING_ENABLED:-false} weight=${LANE_CENTERING_WEIGHT:-0.25} max_delta_rad=${LANE_CENTERING_MAX_CORRECTION_RAD:-0.045} min_confidence=${LANE_CENTERING_MIN_CONFIDENCE:-0.65}"
   echo "Lane_frames=${LANE_CENTERING_MIN_FRAMES:-4} max_age_s=${LANE_CENTERING_TIMEOUT_SEC:-0.4} filter_tau_s=${LANE_CENTERING_FILTER_TAU_SEC:-0.35} correction_rate_rad_s=${LANE_CENTERING_CORRECTION_RATE_RAD_S:-0.06} release_rate_rad_s=${LANE_CENTERING_RELEASE_RATE_RAD_S:-0.10}"
 fi
+echo "VehicleStatus=Competition_Vehicle_Status port=$COMPETITION_STATUS_PORT (legacy EGO_STATUS_PORT ignored)"
 echo "Ubuntu=$UBUNTU_IP  MORAI=$MORAI_IP  container=$CONTAINER_NAME"
 if [[ "$ACTION" == show ]]; then
   echo "Launch=$LAUNCH (show does not contact Docker or send control)"

@@ -1,5 +1,16 @@
 # MORAI 자율주행 통합 저장소
 
+**`new_final_ws` 브랜치 실행 기준:** [Competition 전용 상태 수신과 실행 안내](morai_ws/docs/NEW_FINAL_COMPETITION_KO.md).
+기존 `final_ws`의 GPS·IMU 위치 추정과 곡률·신호등 주행을 유지하고,
+차량 상태 입력을 Competition Vehicle Status / Ubuntu UDP **9081**로 교체했습니다.
+현재 개인 테스트 IP는 Ubuntu `192.168.10.21`, Windows MORAI `192.168.10.14`입니다.
+catkin 작업 공간은 저장소 루트가 아닌 **`morai_ws/`**입니다.
+`morai_ws_full` 브랜치의 통합 런치를 이 브랜치에서 실행하지 않습니다.
+
+아래 기존 문서는 개발 이력을 위해 보존합니다. 예전 Ego 위치 검증·포트·IP 안내보다
+위의 `new_final_ws` 안내를 우선합니다. 기준 커밋과 검증 결과는
+[NEW_FINAL_PROVENANCE.json](NEW_FINAL_PROVENANCE.json)에 기록했습니다.
+
 현장 실행은 [주행 테스트 5가지 — 간단 실행 안내](morai_ws/docs/FIELD_TEST_CHECKLIST_20260921_KO.md)를 사용합니다.
 곡률 → 신호 정지 → 장애물 회피 → 끼어들기 → 전체 조합을 번호로 선택하고, 최고속도도 한 줄로 변경합니다.
 

@@ -51,13 +51,9 @@ validation:
   source_topic: /Ego_topic
   message_type: morai_msgs/EgoVehicleStatus
   use_in_ekf: false
-  position_frame: map
+  position_available: false
   heading_unit: deg
   path_first_point_xyz_m: [-131.68979755061446, -428.3310229377821, 28.543960281954277]
-  sample_ego_initial_xyz_m: [-131.48599243164063, -427.96099853515625, 28.882999420166016]
-  sample_ego_initial_yaw_deg: 62.515
-  expected_initial_path_distance_m: 0.4224
-  expected_initial_heading_error_deg: 1.2169
 
 ekf:
   state: [x_map, y_map, yaw_map, forward_velocity, gyro_bias, accel_bias]
@@ -73,8 +69,9 @@ alignment:
   mode: fixed_gps_to_map_transform
   provisional_utm_to_map_xy: subtract_local_origin
   transform_validated: false
-  validation_reference_topic: /Ego_topic
-  validation_reference_message: morai_msgs/EgoVehicleStatus
-  require_live_reference_check: true
+  validation_reference_topic: null
+  validation_reference_message: null
+  require_live_reference_check: false
+  reference_position_available: false
   save_calibration_to: config/localization_alignment.yaml
 

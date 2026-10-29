@@ -106,8 +106,8 @@ def summarize(kind, msg, ros_now):
                     source_age_s=round(ros_now-msg.header.stamp.to_sec(), 3))
     if kind == 'ego':
         v = msg.velocity
-        return dict(speed_kph=round(math.hypot(v.x, v.y)*3.6, 2),
-                    velocity_mps=[round(v.x, 3), round(v.y, 3)],
+        return dict(speed_kph=round(abs(v.x)*3.6, 2),
+                    velocity_x_mps=round(v.x, 3), velocity_yz_available=False,
                     heading_deg=round(msg.heading, 2),
                     source_age_s=round(ros_now-msg.header.stamp.to_sec(), 3))
     if kind == 'odom':

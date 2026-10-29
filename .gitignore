@@ -5,6 +5,7 @@ logs/
 *.bag
 *.pyc
 __pycache__/
+morai_ws/test-results/
 # Downloaded pinned checkpoint and per-machine Docker configuration.
 morai_ws/src/detection/camera_perception/models/highway_best.pt
 morai_ws/src/detection/camera_perception/models/highway_best.download

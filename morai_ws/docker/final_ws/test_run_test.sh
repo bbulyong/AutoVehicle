@@ -57,7 +57,7 @@ for action in monitor drive; do
     : > "$DOCKER_LOG"
     bash "$FIXTURE/run_test.sh" "$action" "$n" > /dev/null
     has "enable_control:=$control" "$DOCKER_LOG"
-    has 'morai_host_ip:=192.168.0.147' "$DOCKER_LOG"
+    has 'morai_host_ip:=192.168.10.14' "$DOCKER_LOG"
     has 'max_speed_kph:=5.0' "$DOCKER_LOG"
     case "$n" in
       1) has 'morai_udp_ekf_purepursuit.launch' "$DOCKER_LOG" ;;

@@ -168,9 +168,8 @@ class MissionEvaluator:
         self.last_progress_time = time.monotonic()
 
     def ego_callback(self, message: EgoVehicleStatus) -> None:
-        vx = float(message.velocity.x)
-        vy = float(message.velocity.y)
-        speed = math.hypot(vx, vy)
+        # Competition status does not provide velocity.y/z.
+        speed = abs(float(message.velocity.x))
         self.last_speed_kph = speed * MPS_TO_KPH if finite(speed) else None
         self.last_ego_time = time.monotonic()
 

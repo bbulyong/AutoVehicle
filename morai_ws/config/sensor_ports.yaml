@@ -8,9 +8,9 @@ transport:
   udp_fallback_enabled: true
 
 network:
-  morai_host_ip: "192.168.0.147"
+  morai_host_ip: "192.168.10.14"
   ubuntu_bind_ip: "0.0.0.0"
-  ubuntu_algorithm_ip: "192.168.0.185"
+  ubuntu_algorithm_ip: "192.168.10.21"
 
 udp_fallback:
   cameras:
@@ -50,11 +50,11 @@ udp_fallback:
   control:
     ubuntu_source_port: 9094
     morai_destination_port: 9093
-  ego_status:
-    morai_host_port: 908
-    ubuntu_destination_port: 909
-    packet_size: 181
-    note: MORAI EgoVehicleStatus를 수신하는 UDP 포트
+  competition_status:
+    morai_host_port: 9080
+    ubuntu_destination_port: 9081
+    supported_packet_sizes: [181, 229]
+    note: 개인 테스트 Competition 상태 입력. 본선 전달 포트는 별도 확인.
 
 internal_output_topics:
   camera_front: /camera/front/image/compressed

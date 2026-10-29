@@ -9,8 +9,9 @@ source:
   gps_message_type: morai_msgs/GPSMessage
   imu_topic: /Imu
   imu_message_type: sensor_msgs/Imu
-  reference_topic: /Ego_topic
-  reference_message_type: morai_msgs/EgoVehicleStatus
+  reference_topic: null
+  reference_position_available: false
+  reference_message_type: null
   stationary_bag: data/rosbags/alignment_stationary.bag
   straight_bag: data/rosbags/alignment_straight.bag
 

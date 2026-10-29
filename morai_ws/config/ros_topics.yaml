@@ -1,4 +1,4 @@
-# MORAI ROS 네이티브 인터페이스 설정
+# ROS 내부 인터페이스 설정 (new_final_ws 주행은 UDP 수신 브리지 사용)
 # 출처:
 # MORAI-ROS_morai_msgs beta_drive 브랜치
 # MORAI SIM ROS 센서 및 ROS Network Settings 공식 문서
@@ -24,9 +24,9 @@ topics:
   ego_status:
     topic: /Ego_topic
     message_type: morai_msgs/EgoVehicleStatus
-    consumer: localization_validation
+    consumer: longitudinal_control_and_signal_speed
     use_for_ekf: false
-    note: ENU 위치·속도·가속도·heading을 제공하는 개발 검증용 기준값이다.
+    note: Competition 상태의 내부 호환 타입. velocity.x는 m/s, 위치·가속도·velocity.y/z는 미제공(NaN).
 
   lidar:
     topic: /lidar3D

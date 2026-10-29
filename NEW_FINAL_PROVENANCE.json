@@ -1,0 +1,226 @@
+{
+  "repository": "https://github.com/shinejihun1227/AutoVehicle",
+  "branch": "new_final_ws",
+  "base_branch": "final_ws",
+  "base_commit": "c97840c987880736b0b4b10ef346f90e904d9d28",
+  "scope": "final_ws status-input migration only; retain its GPS/IMU localization and driving behavior",
+  "preserved_remote_branch_snapshot": {
+    "final_ws": "c97840c987880736b0b4b10ef346f90e904d9d28",
+    "jihun_ws": "20301b1fec2085fd1e7a336b0c3cf18044ae545d",
+    "merge_ws": "f1d46e55e80b71f6eb5e42234303d8201dc55fca",
+    "morai_ws_full": "fe13fbbd6bf068d7992c90f26b91b8edebb963d0"
+  },
+  "bridge_subset_reused_from": {
+    "branch": "morai_ws_full",
+    "commit": "fe13fbbd6bf068d7992c90f26b91b8edebb963d0",
+    "scope": "Competition bridge parser, publisher and transport tests only; narrowed to Competition-only mode; no highway/obstacle stack imported"
+  },
+  "rules_reference": {
+    "baseline": "v1.2 / final 14 checkpoints",
+    "read_from_workspace": [
+      "competition_reference/README.md",
+      "competition_reference/20261027/DEVELOPMENT_BASELINE.md",
+      "competition_reference/20261027/CODE_IMPACT.md"
+    ],
+    "whole_course_compliance_verified": false
+  },
+  "status_contract": {
+    "source": "Competition Vehicle Status",
+    "ubuntu_udp_receive_port": 9081,
+    "port_source": "user request; personal test profile, not verified organiser forwarding target",
+    "layouts_bytes": [
+      181,
+      229
+    ],
+    "declared_data_lengths": [
+      152,
+      200
+    ],
+    "wire_header": "#MoraiInfo$",
+    "velocity_x_wire_unit": "km/h",
+    "velocity_x_internal_unit": "m/s",
+    "internal_ros_topic": "/Ego_topic",
+    "internal_ros_type": "morai_msgs/EgoVehicleStatus",
+    "unavailable_fields": "position xyz, acceleration xyz, velocity yz = NaN; tire truth fields ignored",
+    "forbidden_slot_decode": false,
+    "general_ego_parser_available": false,
+    "wire_header_identifies_ego_vs_competition": false,
+    "simulator_competition_source_must_be_selected": true,
+    "layout_evidence": [
+      "user-supplied MORAI screenshot: same EgoVehicleStatus.py example, missing truth fields",
+      "team Competition parser and packed NetworkModule struct already audited for fe13fbb"
+    ],
+    "live_capture_verified": false
+  },
+  "localization": {
+    "position_source": "GPS-to-MGeo conversion + original GPS/IMU EKF",
+    "ekf_inputs": [
+      "/localization/gps",
+      "/Imu"
+    ],
+    "pose_topic": "/localization/odometry",
+    "competition_position_used": false,
+    "competition_acceleration_used": false,
+    "new_speed_aiding_added_to_ekf": false,
+    "gps_map_transform_live_validated": false
+  },
+  "preserved_control_defaults": {
+    "direct_final_launch_max_speed_kph": 35,
+    "direct_final_launch_front_bumper_stopline_clearance_m": 0.5,
+    "saved_env_still_overrides_launch": true,
+    "later_integrated_tunings_imported": false
+  },
+  "unchanged_key_files": [
+    {
+      "path": "morai_ws/src/localization/ekf_local_enu/scripts/ekf_local_enu_node.py",
+      "git_blob_sha1": "f882b22f7ca315abe3acc07a704758a17fbc30b0",
+      "canonical_blob_sha256": "c2dd97bae1820a862f08c614f7bd0307c0ad07eb90235ec53c9b1aff82d2d206",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "morai_ws/src/localization/gps_mgeo_converter/scripts/gps_mgeo_converter_node.py",
+      "git_blob_sha1": "fec3369caf1eacabb56cbd102008a072b4d25792",
+      "canonical_blob_sha256": "bb7fe42133258877532d5ff8dd46c8d4dba9cf97ecd8107643f2723592dbdb8b",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "morai_ws/src/localization/gps_mgeo_converter/src/gps_mgeo_converter/coordinate.py",
+      "git_blob_sha1": "17a08732ec72cdaeb3985891bbaad67ecedd1ed1",
+      "canonical_blob_sha256": "af563a0a6bd20166d719acc259d00d65966c19f10bfa76cb6e3f1f90056e7445",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "morai_ws/src/localization/morai_udp_bridge/src/morai_udp_bridge/protocol.py",
+      "git_blob_sha1": "635e970ea7e1c36c8fd1e39e3182417d5b287831",
+      "canonical_blob_sha256": "83a7da37db3ca302e7a1e2272d5bbf2032a45fec40e383b4bad9089c4068c3fd",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "morai_ws/src/localization/morai_udp_bridge/scripts/morai_udp_bridge_node.py",
+      "git_blob_sha1": "31e3f94490aafe9dd78fd3fedac7220d07cb12f3",
+      "canonical_blob_sha256": "323f7b0032795705e18323f2352a8dc49ee0ee78199ed435acd43d2a2b060718",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "morai_ws/config/curvature_signal.yaml",
+      "git_blob_sha1": "12d37a82e0a337527764771d4ac40a8d0864a38f",
+      "canonical_blob_sha256": "788564d9c72c445a0a87f93d64344cdc3e7c249804d27c7e8f70411e6c4b595e",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "morai_ws/data/routes/2026_molit_comp_global_path.txt",
+      "git_blob_sha1": "919aa2d60768ff728249c489602b36a8a4a10495",
+      "canonical_blob_sha256": "f74ff6f53e27c0c4b2cc0e004e5873f7ee1f68f2107f0429f0aad55254d73ee6",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "morai_ws/src/detection/camera_perception/models/best0917.pt",
+      "git_blob_sha1": "9890b55b9a16eb1a1a91b8b2c9985b253a1e6ee8",
+      "canonical_blob_sha256": "6812d43beda5ab6ff18881198f34a49f79d641efbf2768220b34c74dd11aa9f5",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "morai_ws/src/detection/camera_perception/models/yolov8s.pt",
+      "git_blob_sha1": "90b4a2c7bc9e91cf6810356c01517bcdf060b98d",
+      "canonical_blob_sha256": "1f47a78bf100391c2a140b7ac73a1caae18c32779be7d310658112f7ac9aa78a",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "morai_ws/src/experimental/curvature_speed_purepursuit/src/curvature_speed_purepursuit/planner.py",
+      "git_blob_sha1": "1c2869a7a3b2b01c964e7043b66c88f30ae824c8",
+      "canonical_blob_sha256": "d453322d63a06faaca0661b3a60ce0e5df3677a2b7c57fec2a96ccc732a0482e",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "morai_ws/src/experimental/curvature_speed_purepursuit/src/curvature_speed_purepursuit/lane_centering.py",
+      "git_blob_sha1": "ffa3402691e76d2657b039ff4d7026bafe19a730",
+      "canonical_blob_sha256": "2a08d41eb9ddd1d938af1c8139cefafb9421b95c72d5e7b6cf844a1728bbdf89",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "morai_ws/src/control/stopline_control/src/stopline_control/core.py",
+      "git_blob_sha1": "516504d61f34617e7c709d77523fde5094493630",
+      "canonical_blob_sha256": "dd2343f667bb531bb08e17f9651e85466650b696eff585402c8ca15333e2734e",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "morai_ws/src/control/turn_signal_controller/src/turn_signal_controller/signal_association.py",
+      "git_blob_sha1": "936b9c2cdc556cd8c48124f7c0acb4961f8da929",
+      "canonical_blob_sha256": "310515a366e5657bef3cdc2393c85aaa81ab6feb1a1b24baac97924623eb9fd4",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "morai_ws/src/control/purepursuit_mgeo/scripts/roundabout_merge_gate_node.py",
+      "git_blob_sha1": "c7fab8b0633e3678dc6d8912745cd8416d1cca2c",
+      "canonical_blob_sha256": "007605cd77c1a14884ef6de3e5b9c70716434c58f3a516fed689c6acc4c83434",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "morai_ws/src/control/turn_signal_controller/scripts/turn_signal_node.py",
+      "git_blob_sha1": "03ba50c91a96f92ea06f4cd4aede26279e52c2cb",
+      "canonical_blob_sha256": "20ece4f7d10f5fcb9915d75bd8549f7a449aa9b018b0975cf19d7ee6582590dd",
+      "unchanged_from_base": true
+    }
+  ],
+  "offline_validation": {
+    "python38_syntax_errors": [],
+    "suites": [
+      {
+        "suite": "test_new_final",
+        "exit_code": 0,
+        "tests": 11
+      },
+      {
+        "suite": "src/localization/morai_udp_drive_bridge/test",
+        "exit_code": 0,
+        "tests": 20
+      },
+      {
+        "suite": "src/localization/morai_udp_bridge/test",
+        "exit_code": 0,
+        "tests": 6
+      },
+      {
+        "suite": "src/localization/gps_mgeo_converter/test",
+        "exit_code": 0,
+        "tests": 3
+      },
+      {
+        "suite": "src/experimental/curvature_speed_purepursuit/test",
+        "exit_code": 0,
+        "tests": 32
+      },
+      {
+        "suite": "src/control/stopline_control/test",
+        "exit_code": 0,
+        "tests": 59
+      },
+      {
+        "suite": "src/control/turn_signal_controller/test",
+        "exit_code": 0,
+        "tests": 210
+      },
+      {
+        "suite": "src/control/purepursuit_mgeo/test",
+        "exit_code": 0,
+        "tests": 81
+      },
+      {
+        "suite": "src/mission/mission_evaluator/test",
+        "exit_code": 0,
+        "tests": 66
+      }
+    ],
+    "total_tests": 488,
+    "ros_build": false,
+    "morai_driving": false,
+    "live_competition_packet_verified": false
+  },
+  "validation_command": "python3 morai_ws/tools/validate_new_final.py",
+  "limits": [
+    "No ROS/catkin build in the Windows editing environment",
+    "No live MORAI drive or AV handoff test",
+    "Synthetic packets establish only the adopted schema, not actual organiser-forwarder compatibility"
+  ],
+  "execution_guide": "morai_ws/docs/NEW_FINAL_COMPETITION_KO.md"
+}
