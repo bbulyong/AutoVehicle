@@ -20,11 +20,9 @@ CURVATURE_EXCLUDED = {
     '/avoidance_path_manager',
     '/bypass_lane_guard',
     '/avoidance_frenet_debug',
-    '/highway_lane_strategy',
     '/roi_sensor_safety_adapter',
     '/intersection_environment',
     '/pedestrian_crossing_fusion',
-    '/highway_environment_gate',
 }
 ROUNDABOUT_REQUIRED = {
     '/morai_lidar_udp_source',
@@ -43,6 +41,17 @@ def validate_curvature_names(names, output, roundabout_enabled):
         assert required in names, (required, output)
     for excluded in CURVATURE_EXCLUDED:
         assert excluded not in names, (excluded, output)
+
+    if roundabout_enabled:
+        for required in ('/profile2_base_path','/profile2_v9_highway_permission',
+                         '/highway_lane_strategy','/profile2_v9_highway_controller',
+                         '/profile2_v9_roundabout_mux',
+                         '/profile2_v9_obstacle_states','/profile2_v9_merge_gap'):
+            assert required in names, (required, output)
+    else:
+        for excluded in ('/highway_lane_strategy', '/profile2_v9_roundabout_mux',
+                         '/profile2_v9_merge_gap'):
+            assert excluded not in names, (excluded, output)
 
     present_roundabout = ROUNDABOUT_REQUIRED.intersection(names)
     if roundabout_enabled:
@@ -88,7 +97,8 @@ def main():
 
     output=subprocess.check_output(['roslaunch','--nodes','morai_bringup',
         'final_ws_curvature_signal.launch','workspace_path:='+str(ws),
-        'enable_control:=false','enable_roundabout_mission:=false'],env=env,text=True)
+        'enable_control:=false','enable_roundabout_mission:=false',
+        'enable_highway_v9:=false'],env=env,text=True)
     validate_curvature_names(output.splitlines(), output, roundabout_enabled=False)
     print('CURVATURE_SIGNAL_LAUNCH_OK: ROS resolved monitor/drive; control was not started')
 

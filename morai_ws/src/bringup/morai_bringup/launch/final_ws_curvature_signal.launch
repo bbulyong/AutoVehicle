@@ -19,6 +19,7 @@
   <arg name="control_remote_port" default="9093" />
   <arg name="control_source_port" default="9094" />
   <arg name="enable_roundabout_mission" default="true" />
+  <arg name="enable_highway_v9" default="true" />
   <arg name="roundabout_decision_timeout_s" default="0.3" />
   <arg name="roundabout_log_dir" default="$(env HOME)/roundabout_logs" />
   <arg name="lidar_host_port" default="2000" />
@@ -143,7 +144,7 @@
     <param name="path_file" value="$(arg path_file)" />
     <param name="loop_route" value="true" />
     <param name="pose_topic" value="/localization/odometry" />
-    <param name="command_topic" value="/control/ctrl_cmd" />
+    <param name="command_topic" value="$(eval '/control/profile2_baseline_cmd' if arg('enable_highway_v9') == 'true' else '/control/ctrl_cmd')" />
     <param name="publish_command" value="true" />
     <param name="stopline_topic" value="/perception/camera/stopline" />
     <param name="stopline_speed_cap_enabled" value="false" />
@@ -221,7 +222,7 @@
     <arg name="yolo_signal_roi" value="$(arg yolo_signal_roi)" />
     <arg name="yolo_signal_full_frame" value="$(arg yolo_signal_full_frame)" />
     <arg name="yolo_signal_window_size" value="$(arg yolo_signal_window_size)" />
-    <arg name="enable_highway_gate" value="false" />
+    <arg name="enable_highway_gate" value="$(arg enable_highway_v9)" />
     <arg name="enable_pedestrian_crossing" value="false" />
     <arg name="enable_intersection_detection" value="false" />
   </include>
@@ -273,5 +274,104 @@
     <param name="planning_decel_mps2" value="$(arg stopline_planning_decel_mps2)" />
     <param name="brake_ramp_distance_m" value="$(arg stopline_brake_ramp_distance_m)" />
     <param name="settle_distance_m" value="$(arg stopline_settle_distance_m)" />
+  </node>
+
+  <!-- Highway V9 integrates ONLY via the command mux; V6.1 remains unchanged. -->
+  <node if="$(arg enable_highway_v9)" pkg="lidar_perception"
+        type="lidar_tracked_obstacle_state_node.py"
+        name="profile2_v9_obstacle_states" output="screen"/>
+  <node if="$(arg enable_highway_v9)" pkg="lidar_perception"
+        type="lidar_merge_gap_node.py" name="profile2_v9_merge_gap" output="screen">
+    <param name="input_topic" value="/morai/lidar/roundabout_tracking/results"/>
+    <param name="obstacle_state_topic" value="/detection/obstacle_states"/>
+    <param name="highway_gate_required" value="true"/>
+    <param name="highway_gate_topic" value="/profile2_v9/highway_environment"/>
+    <param name="lane_width_m" value="3.0"/>
+  </node>
+  <node if="$(arg enable_highway_v9)" pkg="purepursuit_mgeo"
+        type="profile2_base_path_node.py" name="profile2_base_path"
+        output="screen" required="true">
+    <param name="path_file" value="$(arg path_file)"/>
+    <param name="map_frame" value="map"/>
+    <param name="odom_timeout_s" value="0.5"/>
+  </node>
+  <node if="$(arg enable_highway_v9)" pkg="purepursuit_mgeo"
+        type="profile2_v9_highway_permission_node.py"
+        name="profile2_v9_highway_permission" output="screen" required="true"/>
+  <node if="$(arg enable_highway_v9)" pkg="purepursuit_mgeo"
+        type="highway_lane_strategy_v9_node.py" name="highway_lane_strategy"
+        output="screen" required="true">
+    <param name="path_file" value="$(arg path_file)"/>
+    <param name="map_frame" value="map"/>
+    <param name="base_path_topic" value="/profile2_base_path/active_path"/>
+    <param name="base_stop_topic" value="/profile2_base_path/stop_required"/>
+    <param name="highway_topic" value="/profile2_v9/highway_environment"/>
+    <param name="highway_request_topic" value="/profile2_v9/highway_request"/>
+    <param name="obstacle_topic" value="/perception/lidar/tracked_obstacles_map"/>
+    <param name="lane_info_topic" value="/perception/camera/lane_info"/>
+    <param name="merge_available_topic" value="/perception/merge_gap/available"/>
+    <param name="merge_unavailable_topic" value="/perception/merge_gap/unavailable"/>
+    <param name="target_lane_width_m" value="3.0"/>
+    <param name="mission_request_bypass_sensor_merge_gate" value="false"/>
+    <param name="cruise_speed_mps" value="$(eval float(arg('max_speed_kph'))/3.6)"/>
+    <param name="change_min_length_m" value="45.0"/>
+    <param name="change_max_length_m" value="55.0"/>
+    <param name="max_lateral_accel_mps2" value="1.6"/>
+    <param name="left_divider_expected_tol_m" value="0.90"/>
+    <param name="inner_center_max_abs_y_m" value="0.90"/>
+    <param name="inner_stitch_keep_m" value="7.0"/>
+    <param name="inner_stitch_blend_m" value="10.0"/>
+    <param name="min_lane_confidence" value="0.45"/>
+    <param name="require_left_dashed" value="true"/>
+  </node>
+  <node if="$(arg enable_highway_v9)" pkg="curvature_speed_purepursuit"
+        type="adaptive_curvature_purepursuit_node.py"
+        name="profile2_v9_highway_controller" output="screen" required="true">
+    <remap from="/control/curvature_status" to="/profile2_v9/curvature_status"/>
+    <remap from="/experimental/curvature_reference_path" to="/profile2_v9/reference_path"/>
+    <remap from="/experimental/curvature_progress" to="/profile2_v9/progress"/>
+    <remap from="/experimental/active_reference_path" to="/profile2_v9/active_reference_path"/>
+    <remap from="/experimental/curvature_lookahead_point" to="/profile2_v9/lookahead"/>
+    <remap from="/experimental/curvature_value" to="/profile2_v9/curvature"/>
+    <remap from="/experimental/curvature_speed_limit" to="/profile2_v9/speed_limit"/>
+    <remap from="/experimental/curvature_speed_command" to="/profile2_v9/speed_command"/>
+    <remap from="/experimental/curvature_accel_command" to="/profile2_v9/accel"/>
+    <remap from="/experimental/curvature_brake_command" to="/profile2_v9/brake"/>
+    <remap from="/experimental/curvature_steering" to="/profile2_v9/steering"/>
+    <remap from="/experimental/active_path_source" to="/profile2_v9/path_source"/>
+    <remap from="/experimental/active_path_seq" to="/profile2_v9/path_seq"/>
+    <param name="path_file" value="$(arg path_file)"/>
+    <param name="pose_topic" value="/localization/odometry"/>
+    <param name="command_topic" value="/control/profile2_highway_cmd"/>
+    <param name="publish_command" value="true"/>
+    <param name="use_active_path" value="true"/>
+    <param name="require_active_path" value="true"/>
+    <param name="active_path_topic" value="/highway_lane_strategy/active_path"/>
+    <param name="active_path_timeout_sec" value="0.8"/>
+    <param name="require_fresh_stop_status" value="true"/>
+    <param name="stop_required_topic" value="/highway_lane_strategy/stop_required"/>
+    <param name="stop_status_timeout_sec" value="0.8"/>
+    <param name="use_target_speed_override" value="true"/>
+    <param name="target_speed_override_topic" value="/highway_lane_strategy/target_speed_mps"/>
+    <param name="target_speed_override_timeout_sec" value="0.8"/>
+    <param name="enable_merge_gate" value="false"/>
+    <param name="require_route_mission_ready" value="false"/>
+    <param name="max_speed_kph" value="$(arg max_speed_kph)"/>
+    <param name="lateral_accel_limit_mps2" value="$(arg curve_lateral_accel_limit_mps2)"/>
+    <param name="max_accel_mps2" value="$(arg max_accel_mps2)"/>
+    <param name="max_decel_mps2" value="$(arg max_decel_mps2)"/>
+    <param name="wheelbase_m" value="$(arg wheelbase_m)"/>
+    <param name="max_steering_rad" value="$(arg max_steering_rad)"/>
+    <param name="speed_kp" value="$(arg speed_kp)"/>
+    <param name="speed_ki" value="$(arg speed_ki)"/>
+    <param name="control_rate_hz" value="20.0"/>
+    <param name="longl_cmd_type" value="1"/>
+  </node>
+  <node if="$(arg enable_highway_v9)" pkg="purepursuit_mgeo"
+        type="profile2_v9_roundabout_mux_node.py"
+        name="profile2_v9_roundabout_mux" output="screen" required="true">
+    <param name="roundabout_timeout_s" value="0.75"/>
+    <param name="strategy_timeout_s" value="0.65"/>
+    <param name="command_timeout_s" value="0.4"/>
   </node>
 </launch>
