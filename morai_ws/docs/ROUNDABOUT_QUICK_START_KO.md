@@ -31,23 +31,55 @@ nano highway.env
 UBUNTU_IP=192.168.10.21
 MORAI_IP=192.168.10.14
 CONTAINER_NAME=morai-roundabout-net10
+IMAGE_NAME=morai-final:highway
 ```
 
-## 4. 모델과 컨테이너 준비
+`IMAGE_NAME`은 `docker images`에 표시되는 기존 ROS 이미지 이름과 맞춘다.
+
+## 4. 모델과 Docker 이미지 확인
 
 ```bash
 python3 fetch_highway_model.py
+docker images
 
-# Docker 이미지가 없을 때만 실행
-bash run_highway.sh build
+IMAGE_NAME="$(sed -n 's/^IMAGE_NAME=//p' highway.env)"
+docker image inspect "$IMAGE_NAME" >/dev/null \
+  && echo "IMAGE OK: $IMAGE_NAME" \
+  || echo "IMAGE NOT FOUND: $IMAGE_NAME"
+```
 
+`IMAGE OK`이면 빌드하지 않고 다음 단계로 이동한다. `IMAGE NOT FOUND`일 때만
+다음 명령으로 이미지를 빌드한다.
+
+```bash
+BUILDKIT_PROGRESS=plain bash run_highway.sh build \
+  2>&1 | tee ~/roundabout-build.log
+```
+
+빌드가 실패하면 아래 결과를 확인하고, 원인을 해결하기 전에는 뒤의
+`start`, `stop`, `install_curvature_signal.sh`를 실행하지 않는다.
+
+```bash
+grep -nE 'ERROR|FAILED|Traceback|CMake Error|No module|not found' \
+  ~/roundabout-build.log | tail -80
+```
+
+빌드 후 이미지가 생성됐는지 반드시 확인한다.
+
+```bash
+docker image inspect "$IMAGE_NAME" >/dev/null && echo "IMAGE OK"
+```
+
+## 5. 컨테이너 생성과 코드 설치
+
+```bash
 bash run_highway.sh start
 bash run_highway.sh stop
 bash install_curvature_signal.sh --config
 bash run_highway.sh start
 ```
 
-## 5. 설정과 센서 확인
+## 6. 설정과 센서 확인
 
 ```bash
 bash run_test.sh show 2
@@ -56,7 +88,7 @@ bash run_test.sh monitor 2
 
 센서 수신과 `RUNTIME_MATCH`를 확인한 후 `Ctrl+C`로 `monitor`를 종료한다.
 
-## 6. 실제 주행
+## 7. 실제 주행
 
 ```bash
 bash run_test.sh drive 2
