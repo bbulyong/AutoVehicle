@@ -1,32 +1,31 @@
-new_final_ws 기준으로 외부 차량 상태는 Competition Vehicle Status만 사용합니다. /Ego_topic과 EgoVehicleStatus라는 내부 이름은 호환용으로 남아 있지만, 일반 Ego의 위치·가속도 등은 사용하지 않습니다. 기존 final_ws는 보존했으므로 new_final_ws로 실행해야 합니다.
-
-포트는 송신 측과 수신 측을 구분하면 됩니다.
-데이터	MORAI의 Host Port	받는 쪽 Destination Port
-Collision Data	9091	9092
-Competition Vehicle Status	9088	9099
-
-
-9088·9091은 MORAI 쪽 설정입니다. Ubuntu 수신 코드에는 목적지 포트를 넣습니다. protocol.py는 패킷 해석 파일이므로 포트 수정이 필요 없습니다.
-
-다만 대회 매뉴얼에서 이 표는 Windows 내부 판정 프로그램으로 보내는 포트입니다. 본선 Ubuntu로 전달되는 최종 포트까지 9099라고 확정된 것은 아닙니다. 아래는 개인 테스트에서 MORAI가 Ubuntu로 직접 9099에 보내도록 설정할 때의 방법입니다.
-
-평소 bash run_test.sh drive 2로 실행한다면, highway-test.env 하나만 수정하면 됩니다.
 cd ~/AutoVehicle_new_final_ws/morai_ws/docker/final_ws
+nano highway.env
+파일에서 다음을 확인·수정하세요. IMAGE_NAME은 PC에 이미 있는 ROS 이미지 이름을 사용합니다.
+UBUNTU_IP=192.168.10.21
+MORAI_IP=192.168.10.14
+CONTAINER_NAME=morai-new-final-net10-20261029
+개인 MORAI에서 Competition Vehicle Status 목적지 포트로 9099를 쓰기로 한 설정이라면, 수신 포트도 맞춥니다.
+nano highway-test.env
+COMPETITION_STATUS_PORT=9099로 설정하고, MORAI 쪽 Competition Vehicle Status 목적지도 192.168.10.21:9099로 맞추세요. show 2 출력에도 9099가 표시되어야 합니다. 포트가 서로 다르면 상태 수신이 안 됩니다.
 
-cp -p highway-test.env highway-test.env.port-backup &&
-sed -i '/^COMPETITION_STATUS_PORT=/d' highway-test.env &&
-printf '\nCOMPETITION_STATUS_PORT=9099\n' >> highway-test.env
+그다음 순서는 다음과 같습니다.
+python3 fetch_highway_model.py
 
-bash run_test.sh show 2 | grep -E 'VehicleStatus=|ego_status_port:='
-아래 두 값이 표시되면 적용된 것입니다.
-VehicleStatus=Competition_Vehicle_Status port=9099 ...
-ego_status_port:=9099
-개인 테스트의 MORAI 설정도 다음처럼 맞추세요.
-- Competition Vehicle Status: Host Port 9088, Destination IP 192.168.10.21, Destination Port 9099
-- Collision Data: Host Port 9091, Destination IP 192.168.10.21, Destination Port 9092
-- 일반 Ego Vehicle Status 송신: 끄기
-충돌 수신기 기본 포트는 이미 9092입니다. 다만 drive 2만 실행한다고 충돌 평가 수신기까지 실행되는 구성은 아닙니다.
+# IMAGE_NAME에 해당하는 이미지가 PC에 없을 때만 실행
+bash run_highway.sh build
 
-env만 변경하면 재빌드·재설치는 필요 없습니다. 기존 주행을 Ctrl+C로 종료한 다음 다시 실행하면 됩니다.
+# 새 컨테이너 생성
+bash run_highway.sh start
+
+# 컨테이너를 멈춘 상태에서 새 코드를 설치
+bash run_highway.sh stop
+bash install_curvature_signal.sh --config
+
+# 컨테이너 재시작
+bash run_highway.sh start
+
+# 설정과 설치 상태 확인
+bash run_test.sh show 2
+bash run_test.sh monitor 2
+monitor 2에서 RUNTIME_MATCH와 올바른 IP·상태 수신 포트를 확인한 뒤 Ctrl+C로 종료하고, 실제 주행은 다음 명령으로 시작하세요.
 bash run_test.sh drive 2
-RUN_NEW_FINAL.sh로 직접 실행하는 경우에는 env 대신 명령 뒤에 ego_status_port:=9099를 붙이면 됩니다.
