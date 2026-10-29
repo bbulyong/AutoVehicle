@@ -1,0 +1,41 @@
+cd ~/AutoVehicle_new_final_ws/morai_ws/docker/final_ws
+bash run_highway.sh stop
+2. 회전교차로 브랜치를 별도 폴더에 받습니다.
+git clone --single-branch --branch test/roundabout \
+  https://github.com/shinejihun1227/AutoVehicle.git \
+  ~/AutoVehicle_roundabout
+
+cd ~/AutoVehicle_roundabout/morai_ws/docker/final_ws
+
+cp ~/AutoVehicle_new_final_ws/morai_ws/docker/final_ws/highway.env .
+cp ~/AutoVehicle_new_final_ws/morai_ws/docker/final_ws/highway-test.env .
+이렇게 하면 기존 수신 포트·속도·10m 정차 설정도 복사됩니다.
+3. 새 컨테이너와 이미지 이름을 지정합니다.
+nano highway.env
+다음 값을 수정하세요. TORCH_FLAVOR는 기존 값을 유지합니다.
+UBUNTU_IP=192.168.10.21
+MORAI_IP=192.168.10.14
+CONTAINER_NAME=morai-roundabout-net10
+IMAGE_NAME=morai-roundabout:test
+저장은 Ctrl+O → Enter → Ctrl+X입니다.
+
+카메라 장치도 확인하세요.
+nano highway-test.env
+LANE_INFO_DEVICE=auto
+4. 회전교차로 패키지까지 포함한 새 이미지를 만들고 실행합니다.
+python3 fetch_highway_model.py
+bash run_highway.sh build
+
+bash run_highway.sh start
+bash run_highway.sh stop
+bash install_curvature_signal.sh --config
+bash run_highway.sh start
+
+bash run_test.sh show 2
+bash run_test.sh monitor 2
+show 2에서 다음을 확인하세요.
+container=morai-roundabout-net10
+enable_roundabout_mission:=true
+lidar_port:=2001
+모니터링을 Ctrl+C로 종료한 다음 실제 주행합니다.
+bash run_test.sh drive 2
