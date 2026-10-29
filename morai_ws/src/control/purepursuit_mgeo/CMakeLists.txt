@@ -21,6 +21,9 @@ catkin_install_python(PROGRAMS
   scripts/avoidance_path_manager_node.py
   scripts/bypass_lane_guard_node.py
   scripts/highway_lane_strategy_node.py
+  scripts/highway_lane_strategy_v9_node.py
+  scripts/profile2_base_path_node.py
+  scripts/profile2_highway_mux_node.py
   scripts/roundabout_merge_gate_node.py
   scripts/route_mission_gate_node.py
   scripts/locate_route_region.py

@@ -27,6 +27,7 @@ curvature_runtime_files() (
     local package
     for package in \
       src/experimental/curvature_speed_purepursuit \
+      src/control/purepursuit_mgeo src/detection/lidar_perception \
       src/control/turn_signal_controller src/control/stopline_control \
       src/detection/camera_perception \
       src/localization/ekf_local_enu src/localization/gps_mgeo_converter \
@@ -37,6 +38,7 @@ curvature_runtime_files() (
         find "$package/test" -type f -name '*.py'
       fi
     done
+    find src/detection/lidar_perception/launch -type f -name '*.launch'
     find src/localization/ekf_local_enu/launch src/localization/gps_mgeo_converter/launch \
       src/localization/morai_udp_bridge/launch src/localization/morai_udp_drive_bridge/launch \
       -type f -name '*.launch'
