@@ -45,6 +45,7 @@ class CameraStream:
         self._stop = threading.Event()
         self._thread = None
         self.decode_errors = 0
+        self.error = None
 
     def start(self):
         self._thread = threading.Thread(target=self._worker, daemon=True)
@@ -80,11 +81,12 @@ class CameraStream:
         return False
 
     def _worker(self):
-        receiver = LatestCameraReceiver(
-            self.ip, self.port, stamp_clock=self._stamp_clock
-        )
+        receiver = None
         sequence = 0
         try:
+            receiver = LatestCameraReceiver(
+                self.ip, self.port, stamp_clock=self._stamp_clock
+            )
             while not self._stop.is_set():
                 frame = receiver.wait_for_latest(sequence, timeout=0.1)
                 if frame is None:
@@ -100,6 +102,8 @@ class CameraStream:
                     self._seq = sequence
                     self._source_frame = frame
         except (AttributeError, ValueError, OSError, cv2.error) as ex:
+            self.error = str(ex)
             print(f"[camera] 복구 가능한 오류: {ex}")
         finally:
-            receiver.close()
+            if receiver is not None:
+                receiver.close()

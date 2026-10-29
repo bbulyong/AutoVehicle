@@ -497,8 +497,14 @@ def main(argv=None):
     cam = CameraStream(args.ip, args.port,
                        stamp_clock=(rospy.Time.now if use_ros else None)).start()
     print(f"[real_lane] {args.ip}:{args.port} 대기 중...")
-    if not cam.wait_first(timeout=15.0):
-        raise SystemExit("카메라 프레임이 안 옵니다. 시뮬레이터와 IP/포트를 확인하세요.")
+    while not cam.wait_first(timeout=5.0):
+        if cam.error is not None:
+            raise RuntimeError(f"CAM1 UDP receiver failed: {cam.error}")
+        if use_ros and rospy.is_shutdown():
+            cam.stop()
+            return
+        print(f"[real_lane] CAM1 waiting on {args.ip}:{args.port}; "
+              "check MORAI destination IP/port and other UDP receivers", flush=True)
     print("[real_lane] 수신 시작.")
 
     last_seq, n_since, n = -1, 0, 0
@@ -514,6 +520,8 @@ def main(argv=None):
             stamp = (meta.received_stamp.to_sec() if meta is not None and meta.received_stamp is not None
                      else meta.received_at if meta is not None else 0.0)
             if frame is None or seq == last_seq:
+                if cam.error is not None:
+                    raise RuntimeError(f"CAM1 UDP receiver failed: {cam.error}")
                 time.sleep(0.002)
                 continue
             last_seq = seq

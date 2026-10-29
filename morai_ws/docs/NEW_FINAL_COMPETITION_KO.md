@@ -1,3 +1,6 @@
+현재 카메라·신호·우회전·차선 보정 업데이트: [20261029_CAMERA_SIGNAL_KO.md](20261029_CAMERA_SIGNAL_KO.md).
+기존 로컬 env는 `bash run_test.sh lane on`으로 새 보정 프리셋을 적용한다.
+
 # new_final_ws: final_ws의 Competition 상태 입력 전환
 
 ## 기준과 변경 범위

@@ -25,6 +25,10 @@ signalized_context_ids:
 correlated_signal_heads:
   "mgeo:A2256W000599:0": ["C1256W000016", "C1256W000018"]
 
+# Only the fourth route junction: stop for one second, then turn right.
+stop_then_right_context_ids: ["mgeo:A2256W000318:0"]
+signal_weighted_selection: true
+
 input_timeout_sec: 0.5
 signal_timeout_sec: 0.8
 max_route_error_m: 3.0

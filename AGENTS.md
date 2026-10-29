@@ -10,7 +10,9 @@ Vehicle status input is Competition-only on Ubuntu UDP 9081 by default.
 Its reserved xyz position/acceleration and y/z velocity fields are unavailable.
 Internal EgoVehicleStatus is a compatibility message, not a simulator input.
 Localization remains GPS/IMU EKF; do not substitute status placeholders for pose.
-Do not introduce the later highway/avoidance stack or retune the final_ws drive.
+Do not introduce the later highway/avoidance stack. The user authorised the
+2026-10-29 camera/signal/right-turn/lane follow-up on new_final_ws; see
+morai_ws/docs/20261029_CAMERA_SIGNAL_KO.md for the changed driving settings.
 The rules baseline is v1.2/final 14 checkpoints; synthetic packet tests do not
 establish live simulator or organiser-forwarder compatibility.
 

@@ -351,6 +351,63 @@ def associate(objects, projected_targets, projected_others=None, allow_target_gr
     return Selection(state, confidence, True, head_id, "matched")
 
 
+def associate_weighted(objects, projected_targets, projected_others=None,
+                       allow_target_group=True, allow_correlated_pair=False):
+    """Rank only route-associated heads; keep coherent arrow combinations.
+
+    Detector confidence contributes 65%, projection alignment 35%. A small
+    conflicting runner-up margin remains UNKNOWN. Other-road heads and absent
+    map projections can never win by detector confidence alone.
+    """
+    objects = list(objects)
+    original = associate(objects, projected_targets, projected_others,
+                         allow_target_group, allow_correlated_pair)
+    if original.valid:
+        return original
+    try:
+        targets = _projections(projected_targets)
+        others = _projections(projected_others or {})
+        for key in targets.keys() & others.keys():
+            if targets[key] != others[key]:
+                return _unknown('invalid_projection')
+        others = {k: v for k, v in others.items() if k not in targets}
+        if not targets:
+            return original
+        ranked = []
+        for obj in objects:
+            x, y, w, h, conf = (_number(getattr(obj, k)) for k in
+                               ('x_center', 'y_center', 'width', 'height', 'conf'))
+            if x < 0 or y < 0 or w <= 0 or h <= 0 or not 0 <= conf <= 1:
+                return _unknown('invalid_object')
+            state = _state(obj.class_name)
+            if conf < _MIN_CONFIDENCE or state == 'UNKNOWN':
+                continue
+            box = (x-w/2-_GATE_PX, y-h/2-_GATE_PX,
+                   x+w/2+_GATE_PX, y+h/2+_GATE_PX)
+            matches = [(key, uv) for key, uv in targets.items() if _contains(box, uv)]
+            if not matches:
+                continue
+            key, (u, v) = min(matches, key=lambda p: (p[1][0]-x)**2+(p[1][1]-y)**2)
+            distance = (u-x)**2 + (v-y)**2
+            if any(_contains(box, uv) and (uv[0]-x)**2+(uv[1]-y)**2 <= distance
+                   for uv in others.values()):
+                continue
+            alignment = 1.0 / (1.0 + ((u-x)/(w/2+_GATE_PX))**2
+                               + ((v-y)/(h/2+_GATE_PX))**2)
+            ranked.append((0.65*conf + 0.35*alignment, state, conf, key))
+        ranked.sort(reverse=True)
+        if not ranked:
+            return original
+        best = ranked[0]
+        conflict = next((p for p in ranked[1:] if p[1] != best[1]), None)
+        if conflict and best[0] - conflict[0] < 0.025:
+            return _unknown('weighted_signal_tie')
+        identity = tuple(sorted(targets)) if allow_target_group and len(targets) > 1 else best[3]
+        return Selection(best[1], best[2], True, identity, 'matched_weighted_route_head')
+    except (AttributeError, TypeError, ValueError, OverflowError):
+        return _unknown('invalid_object')
+
+
 class SignalConfirmation:
     """Confirm permissions from distinct, ordered source-image timestamps.
 
