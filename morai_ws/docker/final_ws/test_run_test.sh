@@ -3,14 +3,21 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 TMP_ROOT="$(cd -- "${TMPDIR:-/tmp}" && pwd -P)"
-FIXTURE="$(mktemp -d "$TMP_ROOT/morai-recipes.XXXXXXXX")"
+WORK_ROOT="$(mktemp -d "$TMP_ROOT/morai-recipes.XXXXXXXX")"
+FIXTURE="$WORK_ROOT/morai_ws/docker/final_ws"
+mkdir -p "$FIXTURE" "$WORK_ROOT/morai_ws/config"
 cleanup() {
-  [[ "$FIXTURE" == "$TMP_ROOT"/morai-recipes.* &&
-     "$(cd -- "$FIXTURE" && pwd -P)" == "$FIXTURE" ]] || return 1
-  rm -rf -- "$FIXTURE"
+  [[ "$WORK_ROOT" == "$TMP_ROOT"/morai-recipes.* &&
+     "$(cd -- "$WORK_ROOT" && pwd -P)" == "$WORK_ROOT" ]] || return 1
+  rm -rf -- "$WORK_ROOT"
 }
 trap cleanup EXIT
 cp "$SCRIPT_DIR/"{run_test.sh,run_highway.sh,open_camera_dashboard.sh,diagnose_curvature_signal.py,highway-test.env.example} "$FIXTURE/"
+printf 'curvature_runtime_manifest() { :; }\n' > "$FIXTURE/curvature_runtime_files.sh"
+printf '{}\n' > "$WORK_ROOT/morai_ws/config/curvature_signal.yaml"
+git -C "$WORK_ROOT/morai_ws" init -q
+git -C "$WORK_ROOT/morai_ws" -c user.name=test -c user.email=test@example.com \
+  commit --allow-empty -qm fixture
 cp "$SCRIPT_DIR/highway.env.example" "$FIXTURE/highway.env"
 cp "$SCRIPT_DIR/highway-test.env.example" "$FIXTURE/highway-test.env"
 # Separate launcher tests cover Docker/X11. Here verify only action dispatch.
@@ -23,6 +30,7 @@ cat > "$FIXTURE/bin/docker" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$@" >> "$DOCKER_LOG"
 if [[ "${!#}" == - ]]; then cat > "$DOCKER_LOG.stdin"; fi
+if [[ "$*" == *"grep -q ^state=pending$"* ]]; then exit 1; fi
 STUB
 chmod +x "$FIXTURE/bin/docker"
 export PATH="$FIXTURE/bin:$PATH"

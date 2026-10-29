@@ -30,6 +30,7 @@ from purepursuit_mgeo.longitudinal_controller import (
     SpeedPIController,
     VehicleSpeedSource,
 )
+from purepursuit_mgeo.roundabout_mission.integration import MissionStatusSource
 from curvature_speed_purepursuit.planner import (
     PathPoint,
     build_speed_profile,
@@ -290,6 +291,19 @@ class CurvatureSpeedPurePursuitNode:
         self.last_stopline_stamp = 0.0
         self.active_stopline_s = None
 
+        # V6.1 owns only the roundabout traffic decision.  The main planner,
+        # pedal PI, slew limits, steering and CtrlCmd publisher stay unchanged.
+        self.enable_roundabout_mission = bool(
+            rospy.get_param("~enable_roundabout_mission", False)
+        )
+        self.roundabout_status_topic = str(rospy.get_param(
+            "~roundabout_status_topic", "/roundabout_merge_gate/status"
+        ))
+        self.roundabout_lock = threading.RLock()
+        self.roundabout_status_source = MissionStatusSource(float(rospy.get_param(
+            "~roundabout_decision_timeout_s", 0.3
+        )))
+
         self.pose_topic = rospy.get_param("~pose_topic", "/localization/odometry")
         self.pose_timeout_sec = max(
             0.0, float(rospy.get_param("~pose_timeout_sec", 0.5))
@@ -393,6 +407,15 @@ class CurvatureSpeedPurePursuitNode:
         self.goal_pub = rospy.Publisher(
             "/experimental/curvature_goal_reached", Bool, queue_size=1, latch=True
         )
+        self.roundabout_stop_pub = rospy.Publisher(
+            "/experimental/roundabout_mission_stop", Bool, queue_size=1
+        )
+        self.roundabout_target_pub = rospy.Publisher(
+            "/experimental/roundabout_mission_target_mps", Float64, queue_size=1
+        )
+        self.roundabout_reason_pub = rospy.Publisher(
+            "/experimental/roundabout_mission_reason", String, queue_size=1
+        )
 
         rospy.Subscriber(self.pose_topic, Odometry, self.odom_callback, queue_size=10)
         if self.vehicle_speed_topic:
@@ -408,6 +431,13 @@ class CurvatureSpeedPurePursuitNode:
                 rospy.get_param("~stopline_topic", "/perception/camera/stopline"),
                 StopLineDetection,
                 self.stopline_callback,
+                queue_size=10,
+            )
+        if self.enable_roundabout_mission:
+            rospy.Subscriber(
+                self.roundabout_status_topic,
+                String,
+                self.roundabout_status_callback,
                 queue_size=10,
             )
         self.publish_reference_path()
@@ -460,6 +490,13 @@ class CurvatureSpeedPurePursuitNode:
         self.vehicle_speed_source.observe(
             abs(float(message.velocity.x)),
             message.header.stamp.to_sec(), rospy.Time.now().to_sec(), time.monotonic())
+
+    def roundabout_status_callback(self, message: String) -> None:
+        now, wall_now = rospy.Time.now().to_sec(), time.monotonic()
+        with self.roundabout_lock:
+            accepted = self.roundabout_status_source.observe(message.data, now, wall_now)
+        if not accepted:
+            rospy.logwarn_throttle(2.0, "Rejected invalid/stale roundabout mission status")
 
     def lane_info_callback(self, message: String) -> None:
         """Use actual two-sided CAM1 geometry and its original observation time.
@@ -957,6 +994,19 @@ class CurvatureSpeedPurePursuitNode:
         )
         if stopline_cap_active:
             speed_limit = min(speed_limit, self.stopline_approach_speed_kph / MPS_TO_KPH)
+        roundabout_stop = False
+        roundabout_reason = "disabled"
+        if self.enable_roundabout_mission:
+            with self.roundabout_lock:
+                speed_limit, roundabout_stop, roundabout_reason = (
+                    self.roundabout_status_source.apply(
+                        speed_limit, now, time.monotonic()
+                    )
+                )
+            stop = stop or roundabout_stop
+        self.roundabout_stop_pub.publish(Bool(roundabout_stop))
+        self.roundabout_target_pub.publish(Float64(speed_limit))
+        self.roundabout_reason_pub.publish(String(data=roundabout_reason))
         command_speed = 0.0 if stop else self.apply_speed_rate_limit(speed_limit, dt)
         curvature = profile_value_at_s(self.s_values, self.curvatures, progress_s)
 
@@ -1026,7 +1076,8 @@ class CurvatureSpeedPurePursuitNode:
             "Curvature PP progress=%.1f/%.1fm kappa=%.4f speed_limit=%.2f "
             "speed_cmd=%.2f measured=%.2f km/h accel=%.2f brake=%.2f "
             "lookahead=%.2f steering=%.4f path_lateral_error=%.2f "
-            "lane_correction=%.4f lane_active=%s stop=%s stopline_cap=%s",
+            "lane_correction=%.4f lane_active=%s stop=%s stopline_cap=%s "
+            "roundabout=%s",
             progress_s,
             self.total_length_m,
             curvature,
@@ -1042,6 +1093,7 @@ class CurvatureSpeedPurePursuitNode:
             lane_correction_active,
             stop,
             stopline_cap_active,
+            roundabout_reason,
         )
 
 

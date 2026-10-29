@@ -316,5 +316,26 @@
       "conflict_margin": 0.025
     },
     "morai_driving_verified": false
+  },
+  "roundabout_v61_integration": {
+    "source_repository": "https://github.com/ohdang23/yujin_morai",
+    "source_commit": "6c7d805c993f8f2f0d73362de1898206401e0b05",
+    "guide": "morai_ws/docs/ROUNDABOUT_V61_INTEGRATION_KO.md",
+    "decision_version": "6.1.0",
+    "control_owner": "new_final_ws curvature_speed_purepursuit",
+    "source_test_driver_imported": false,
+    "main_control_parameters_preserved": true,
+    "route_indices": [1720, 1788, 1800, 1822, 1832, 1865, 1900],
+    "entry_decision_stop_index": 1792,
+    "circulating_mgeo_links": [
+      "A2256W000134",
+      "A2256W000135",
+      "A2256W000132",
+      "A2256W000133"
+    ],
+    "circulating_conflict_indices": [42, 52],
+    "lidar_udp_port": 2001,
+    "ros_build_verified": false,
+    "morai_driving_verified": false
   }
 }

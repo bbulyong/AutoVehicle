@@ -39,13 +39,30 @@ class CurvatureSignalLaunchTest(unittest.TestCase):
         self.assertEqual(base.find("arg[@name='enable_control']").get("value"), "$(arg enable_control)")
         self.assertEqual(base.find("arg[@name='enable_purepursuit']").get("value"), "false")
 
+    def test_roundabout_v61_caps_the_main_controller_without_a_second_driver(self):
+        pp = self.root.find("node[@type='curvature_speed_purepursuit_node.py']")
+        gate = self.root.find("node[@type='roundabout_v61_gate_node.py']")
+        self.assertIsNotNone(gate)
+        self.assertEqual(gate.get("name"), "roundabout_merge_gate")
+        self.assertEqual(self.param(pp, "enable_roundabout_mission"),
+                         "$(arg enable_roundabout_mission)")
+        self.assertEqual(self.param(pp, "roundabout_status_topic"),
+                         "/roundabout_merge_gate/status")
+        self.assertFalse(any(node.get("type") == "roundabout_test_driver.py"
+                             for node in self.root.findall("node")))
+        lidar = next(include for include in self.root.findall("include")
+                     if "lidar_algorithm_pipeline.launch" in include.get("file", ""))
+        self.assertEqual(lidar.find("arg[@name='map_obstacle_topic']").get("value"),
+                         "/perception/lidar/tracked_obstacles_map")
+
     def test_external_stops_and_camera_stream_watchdog_are_disabled(self):
         for key in ("require_sensor_quality", "require_fresh_safety", "allow_blackout_lane_corridor", "lamp_output_enabled"):
             self.assertEqual(self.param(self.fusion, key), "false")
         self.assertEqual(self.param(self.fusion, "require_fresh_camera_stream"), "false")
         self.assertEqual(self.param(self.fusion, "test_without_turn_signals"), "true")
         self.assertEqual(self.param(self.fusion, "safety_topic"), "/curvature_signal/unused_external_safety")
-        camera = self.root.findall("include")[1]
+        camera = next(include for include in self.root.findall("include")
+                      if "camera_perception.launch" in include.get("file", ""))
         for key in ("enable_lane", "enable_highway_gate", "enable_pedestrian_crossing", "enable_intersection_detection"):
             self.assertEqual(camera.find("arg[@name='%s']" % key).get("value"), "false")
 

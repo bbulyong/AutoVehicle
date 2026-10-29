@@ -15,6 +15,19 @@ import time
 
 
 def summarize(kind, msg, ros_now):
+    if kind == 'roundabout_status':
+        data = json.loads(msg.data)
+        keys = ('version', 'state', 'active', 'decision_phase', 'decision_reason',
+                'decision_reason_detail', 'target_speed', 'stop_required', 'allowed',
+                'emergency', 'dangerous_vehicle_count', 'conflict_candidate_count',
+                'minimum_time_gap', 'commit_latched', 'lead_vehicle_id', 'lead_gap',
+                'lead_relative_following_active', 'lead_relative_speed_cap_mps',
+                'decision_compute_ms', 'odom_fresh', 'obstacle_fresh')
+        return {key: data[key] for key in keys if key in data}
+    if kind == 'roundabout_stop':
+        return dict(stop=bool(msg.data))
+    if kind == 'roundabout_reason':
+        return dict(reason=msg.data)
     if kind == 'status':
         data = json.loads(msg.data)
         keys = ('mode', 'reason', 'reference_path_match', 'progress_s_m',
@@ -175,6 +188,7 @@ def runtime_installation():
     import importlib.util
     for module in ('curvature_speed_purepursuit.planner',
                    'purepursuit_mgeo.longitudinal_controller',
+                   'purepursuit_mgeo.roundabout_mission.core',
                    'turn_signal_controller.turn_motion', 'turn_signal_controller.route_context',
                    'stopline_control.core', 'camera_perception.traffic_signal'):
         try:
@@ -223,6 +237,9 @@ def main():
                  '/curvature_speed_purepursuit/lane_centering_filter_tau_sec',
                  '/curvature_speed_purepursuit/lane_centering_correction_rate_rad_s',
                  '/curvature_speed_purepursuit/lane_centering_release_rate_rad_s',
+                 '/curvature_speed_purepursuit/enable_roundabout_mission',
+                 '/curvature_speed_purepursuit/roundabout_decision_timeout_s',
+                 '/roundabout_merge_gate/version',
                  '/lane_info_contract/timeout_sec',
                  '/lane_info_contract/min_confidence',
                  '/curvature_speed_purepursuit/conservative_curve_speed_enabled',
@@ -259,6 +276,10 @@ def main():
         'lane': ('/detection/lane', LaneDetection),
         'lane_info': (rospy.get_param('/curvature_speed_purepursuit/lane_info_topic', '/perception/camera/lane_info'), String),
         'lane_centering': ('/experimental/curvature_lane_centering_status', String),
+        'roundabout_status': ('/roundabout_merge_gate/status', String),
+        'roundabout_stop': ('/experimental/roundabout_mission_stop', Bool),
+        'roundabout_reason': ('/experimental/roundabout_mission_reason', String),
+        'lidar_tracks': ('/perception/lidar/tracked_obstacles_map', rospy.AnyMsg),
         'stopline': ('/perception/camera/stopline', StopLineDetection),
         'lights': ('/detection/traffic_light', ObjectInfoArray),
         'cam1_rviz': ('/debug/cameras/cam1/image', rospy.AnyMsg),

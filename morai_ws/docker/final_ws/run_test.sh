@@ -217,6 +217,10 @@ case "$TEST_PROFILE" in
       "pedal_release_rate_per_sec:=$PEDAL_RELEASE_RATE_PER_SEC"
       "signal_config_file:=$SIGNAL_CONFIG_FILE"
       "lane_info_port:=$LANE_INFO_PORT" "yolo_port:=$YOLO_PORT"
+      "enable_roundabout_mission:=true"
+      "lidar_host_port:=$ROI_LIDAR_HOST_PORT" "lidar_port:=$ROI_LIDAR_PORT"
+      "lidar_x_m:=$LIDAR_X_M" "lidar_y_m:=$LIDAR_Y_M"
+      "lidar_yaw_deg:=$LIDAR_YAW_DEG"
       "lane_info_device:=$LANE_INFO_DEVICE" "lane_info_every:=$LANE_INFO_EVERY"
       "lane_min_confidence:=$LANE_MIN_CONFIDENCE" "lane_info_timeout_s:=$LANE_INFO_TIMEOUT_S"
       "enable_lane_centering:=${LANE_CENTERING_ENABLED:-true}"
@@ -275,6 +279,7 @@ if [[ "$TEST_PROFILE" == curvature_signal ]]; then
   echo "PI=$SPEED_KP/$SPEED_KI lookahead_gain=$LOOKAHEAD_GAIN steer_rate_rad_s=$MAX_STEERING_RATE_RAD_S approach_kph=$STOPLINE_APPROACH_SPEED_KPH stop_clearance_m=$STOPLINE_HOLD_DISTANCE_M"
   echo "Lane_centering=${LANE_CENTERING_ENABLED:-true} weight=${LANE_CENTERING_WEIGHT:-0.45} max_delta_rad=${LANE_CENTERING_MAX_CORRECTION_RAD:-0.065} min_confidence=${LANE_CENTERING_MIN_CONFIDENCE:-0.65}"
   echo "Lane_frames=${LANE_CENTERING_MIN_FRAMES:-4} max_age_s=${LANE_CENTERING_TIMEOUT_SEC:-0.4} filter_tau_s=${LANE_CENTERING_FILTER_TAU_SEC:-0.25} correction_rate_rad_s=${LANE_CENTERING_CORRECTION_RATE_RAD_S:-0.10} release_rate_rad_s=${LANE_CENTERING_RELEASE_RATE_RAD_S:-0.10}"
+  echo "Roundabout=V6.1-main lidar_port=$ROI_LIDAR_PORT decision_timeout_s=0.3"
 fi
 echo "VehicleStatus=Competition_Vehicle_Status port=$COMPETITION_STATUS_PORT (legacy EGO_STATUS_PORT ignored)"
 echo "Ubuntu=$UBUNTU_IP  MORAI=$MORAI_IP  container=$CONTAINER_NAME"
